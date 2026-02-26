@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { decryptTransaction, encryptTransaction, generatePQCKeys, getPQCPrivateKey, hashMpin, signTransaction, storePQCPrivateKey } from "../../lib/crypto";
 import { getSession, signInUser, signOutUser, signUpUser, supabase } from "../../lib/supabase";
 
@@ -334,7 +334,7 @@ export default function QuantumPay() {
       const rp = Object.keys(users).find(ph => users[ph].upiId === recipientUpi);
       if (rp) {
         users[rp].balance = (users[rp].balance || 0) + amt;
-        users[rp].transactions = [{ id: Date.now() + 1, name: senderName, type: "received", amount: amt, time: "Just now", note: note || "Payment from " + senderName }, ...(users[rp].transactions || [])];
+        users[rp].transactions = [{ id: Date.now() + 1, name: senderName, type: "received", amount: amt, time: "Just now", note: "Payment from " + senderName }, ...(users[rp].transactions || [])];
       }
       LocalDB.saveUsers(users);
     }
@@ -563,7 +563,7 @@ export default function QuantumPay() {
             <div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 1, marginBottom: 4 }}>TOTAL BALANCE</div>
               <div style={{ fontSize: 30, fontWeight: 900, color: "#fff", letterSpacing: -1 }}>
-                {balanceVisible ? `₹${balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "₹ ••••••"}
+                {balanceVisible ? `₹${balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })} ` : "₹ ••••••"}
               </div>
             </div>
             <div onClick={() => setBalanceVisible(v => !v)} style={{ fontSize: 20, cursor: "pointer", marginTop: 4 }}>{balanceVisible ? "👁" : "🙈"}</div>
@@ -588,14 +588,14 @@ export default function QuantumPay() {
       <div style={{ padding: "18px 20px 4px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
           {[
-            { icon: "↑", label: "Send", color: "#8b5cf6", bg: "rgba(139,92,246,0.15)", action: () => { setSendStep(1); navigate("send"); } },
-            { icon: "↓", label: "Request", color: "#06b6d4", bg: "rgba(6,182,212,0.15)", action: () => navigate("request") },
-            { icon: "⊡", label: "Scan", color: "#10b981", bg: "rgba(16,185,129,0.15)", action: () => navigate("scan") },
-            { icon: "+", label: "Add Money", color: "#a78bfa", bg: "rgba(167,139,250,0.15)", action: () => { setAddMoneyStep(1); navigate("addmoney"); } },
+            { icon: "↑", label: "Send", color: "#8b5cf6", bg: "rgba(139,92,246,0.4)", action: () => { setSendStep(1); navigate("send"); } },
+            { icon: "↓", label: "Request", color: "#06b6d4", bg: "rgba(6,182,212,0.4)", action: () => navigate("request") },
+            { icon: "⊡", label: "Scan", color: "#10b981", bg: "rgba(16,185,129,0.4)", action: () => navigate("scan") },
+            { icon: "+", label: "Add Money", color: "#a78bfa", bg: "rgba(167,139,250,0.4)", action: () => { setAddMoneyStep(1); navigate("addmoney"); } },
           ].map(item => (
             <div key={item.label} onClick={item.action} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, cursor: "pointer" }}>
-              <div style={{ width: 54, height: 54, borderRadius: 17, background: item.bg, border: `1px solid ${item.color}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, color: item.color, fontWeight: 900 }}>{item.icon}</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", fontWeight: 600, textAlign: "center" }}>{item.label}</div>
+              <div style={{ width: 54, height: 54, borderRadius: 17, background: item.bg, border: `1.5px solid ${item.color}80`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, color: item.color, fontWeight: 900, boxShadow: `0 0 12px ${item.color}20` }}>{item.icon}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", fontWeight: 700, textAlign: "center" }}>{item.label}</div>
             </div>
           ))}
         </div>
@@ -685,7 +685,7 @@ export default function QuantumPay() {
       {sendStep === 3 && selectedContact && <>
         <div style={{ ...S.card, padding: 20, marginBottom: 18 }}>
           <div style={S.label}>CONFIRM PAYMENT</div>
-          {[["To", selectedContact.name], ["UPI ID", selectedContact.upi], ["Amount", `₹${Number(amount).toLocaleString("en-IN")}`], ["Note", note || "—"]].map(([k, v]) => (
+          {[["To", selectedContact.name], ["UPI ID", selectedContact.upi], ["Amount", `₹${Number(amount).toLocaleString("en-IN")} `], ["Note", note || "—"]].map(([k, v]) => (
             <div key={k} style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
               <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 13 }}>{k}</span>
               <span style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>{v}</span>
@@ -791,6 +791,56 @@ export default function QuantumPay() {
   const ScanScreen = () => {
     const qrData = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(userName)}&cu=INR`;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}&bgcolor=0d0d1f&color=8b5cf6&qzone=2`;
+    const scannerRef = useRef(null);
+    const scannerInstanceRef = useRef(null);
+    const [scanError, setScanError] = useState("");
+    const [scanning, setScanning] = useState(false);
+
+    const startScanner = async () => {
+      setScanError("");
+      setScanning(true);
+      try {
+        const { Html5Qrcode } = await import("html5-qrcode");
+        const scanner = new Html5Qrcode("qr-reader");
+        scannerInstanceRef.current = scanner;
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 220, height: 220 } },
+          (decodedText) => {
+            // Parse UPI QR: upi://pay?pa=xxx@qpay&pn=Name
+            let upi = decodedText;
+            if (decodedText.startsWith("upi://")) {
+              const params = new URLSearchParams(decodedText.split("?")[1] || "");
+              upi = params.get("pa") || decodedText;
+            }
+            scanner.stop().catch(() => { });
+            scannerInstanceRef.current = null;
+            setScanning(false);
+            setPayUpi(upi);
+            // Auto-navigate to send screen
+            setSelectedContact({ name: upi, upi: upi, avatar: "👤", color: "#8b5cf6" });
+            setSendStep(2);
+            navigate("send");
+          },
+          () => { } // ignore scan failures
+        );
+      } catch (err) {
+        setScanning(false);
+        setScanError(err?.message?.includes("NotAllowed") ? "Camera access denied. Please allow camera permission." : "Camera not available on this device.");
+      }
+    };
+
+    const stopScanner = () => {
+      if (scannerInstanceRef.current) {
+        scannerInstanceRef.current.stop().catch(() => { });
+        scannerInstanceRef.current = null;
+      }
+      setScanning(false);
+    };
+
+    // Cleanup on tab switch or unmount
+    useEffect(() => { return () => stopScanner(); }, [scanTab]);
+
     return (
       <div style={{ padding: "16px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
@@ -798,7 +848,7 @@ export default function QuantumPay() {
           <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Scan & Pay</div>
         </div>
         <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-          {[["my-qr", "My QR Code"], ["pay-upi", "Pay via UPI"]].map(([key, label]) => (
+          {[["my-qr", "My QR Code"], ["scan-qr", "Scan QR"]].map(([key, label]) => (
             <div key={key} onClick={() => setScanTab(key)} style={{ flex: 1, padding: "10px", borderRadius: 12, textAlign: "center", fontSize: 13, fontWeight: 700, cursor: "pointer", background: scanTab === key ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.07)", color: scanTab === key ? "#fff" : "rgba(255,255,255,0.4)" }}>{label}</div>
           ))}
         </div>
@@ -816,10 +866,35 @@ export default function QuantumPay() {
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", textAlign: "center" }}>Share this QR code to receive payments instantly</div>
           </div>
         )}
-        {scanTab === "pay-upi" && (
+        {scanTab === "scan-qr" && (
           <div>
+            {/* QR Scanner Area */}
+            <div style={{ ...S.card, padding: 20, marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#8b5cf6", letterSpacing: 0.5 }}>📷 SCAN QR CODE</div>
+              <div id="qr-reader" ref={scannerRef} style={{ width: 260, height: 260, borderRadius: 16, overflow: "hidden", background: "#000", border: "2px solid rgba(16,185,129,0.4)" }}>
+                {!scanning && (
+                  <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+                    <div style={{ fontSize: 48 }}>📸</div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", textAlign: "center", padding: "0 20px" }}>Tap button below to open camera</div>
+                  </div>
+                )}
+              </div>
+              {scanError && <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 12, padding: "10px 14px", fontSize: 12, color: "#f43f5e", width: "100%", boxSizing: "border-box" }}>⚠️ {scanError}</div>}
+              {!scanning ? (
+                <div onClick={startScanner} style={{ ...S.gradBtn(false), width: "100%", boxSizing: "border-box" }}>🔍 Start Scanner</div>
+              ) : (
+                <div onClick={stopScanner} style={{ background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 18, padding: "14px", textAlign: "center", fontSize: 14, fontWeight: 800, color: "#f43f5e", cursor: "pointer", width: "100%", boxSizing: "border-box" }}>⏹ Stop Scanner</div>
+              )}
+            </div>
+
+            {/* Manual UPI fallback */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+              <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.1)" }} />
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontWeight: 700 }}>OR</div>
+              <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.1)" }} />
+            </div>
             <div style={{ ...S.card, padding: 18, marginBottom: 14 }}>
-              <div style={S.label}>ENTER UPI ID TO PAY</div>
+              <div style={S.label}>ENTER UPI ID MANUALLY</div>
               <input value={payUpi} onChange={e => setPayUpi(e.target.value.toLowerCase().replace(/\s/g, ""))} placeholder="e.g. alok@qpay" style={{ ...S.input }} />
             </div>
             <div onClick={() => { if (payUpi.includes("@")) { setSelectedContact({ name: payUpi, upi: payUpi, avatar: "👤", color: "#8b5cf6" }); setSendStep(2); navigate("send"); } }} style={S.gradBtn(!payUpi.includes("@"))}>Pay Now →</div>
@@ -996,14 +1071,14 @@ export default function QuantumPay() {
       <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" }}>{renderScreen()}</div>
       <div style={{ background: "rgba(10,10,24,0.97)", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-around", padding: "10px 0 18px", flexShrink: 0 }}>
         {[["🏠", "Home", "home"], ["↑↓", "Pay", "send"], ["⊡", "Scan", "scan"], ["📋", "History", "history"]].map(([icon, label, key]) => (
-          <div key={key} onClick={() => { if (key === "send") setSendStep(1); setScreen(key); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", opacity: screen === key ? 1 : 0.35 }}>
+          <div key={key} onClick={() => { if (key === "send") setSendStep(1); setScreen(key); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", opacity: screen === key ? 1 : 0.55 }}>
             <span style={{ fontSize: 20 }}>{icon}</span>
-            <span style={{ fontSize: 10, color: screen === key ? "#8b5cf6" : "rgba(255,255,255,0.4)", fontWeight: screen === key ? 800 : 400 }}>{label}</span>
+            <span style={{ fontSize: 10, color: screen === key ? "#8b5cf6" : "rgba(255,255,255,0.5)", fontWeight: screen === key ? 800 : 600 }}>{label}</span>
           </div>
         ))}
-        <div onClick={() => setScreen("profile")} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", opacity: screen === "profile" ? 1 : 0.35 }}>
+        <div onClick={() => setScreen("profile")} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", opacity: screen === "profile" ? 1 : 0.55 }}>
           <div style={{ width: 24, height: 24, borderRadius: 12, background: screen === "profile" ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 900, color: "#fff" }}>{userInitial}</div>
-          <span style={{ fontSize: 10, color: screen === "profile" ? "#8b5cf6" : "rgba(255,255,255,0.4)", fontWeight: screen === "profile" ? 800 : 400 }}>Profile</span>
+          <span style={{ fontSize: 10, color: screen === "profile" ? "#8b5cf6" : "rgba(255,255,255,0.5)", fontWeight: screen === "profile" ? 800 : 600 }}>Profile</span>
         </div>
       </div>
     </PhoneFrame>
