@@ -87,7 +87,7 @@ To run QuantumPay locally on your machine:
 
 ## 📸 Screenshots & Feel
 
-*(Add screenshots of your application here before sharing! Great places to screenshot: The Home Screen, The Success Pulse Checkmark, The PQC Overlay, and the Bank Linking Flow.)*
+
 
 ---
 
