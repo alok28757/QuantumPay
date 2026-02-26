@@ -125,6 +125,12 @@ export default function QuantumPay() {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [cloudMode, setCloudMode] = useState(null);
   const [contacts, setContacts] = useState([]);
+  const [linkedBanks, setLinkedBanks] = useState([]);
+
+  // Bank Linking States
+  const [bankStep, setBankStep] = useState(1);
+  const [selectedBank, setSelectedBank] = useState(null);
+  const [bankOtp, setBankOtp] = useState("");
 
   // ─── DUAL-MODE DATA LAYER ────────────────────────────────────────────────
   const loadUserData = async (phone, isCloud) => {
@@ -135,6 +141,7 @@ export default function QuantumPay() {
         setBalance(p.balance || 0);
         setProfile({ name: p.name || "", phone });
         setUser({ phone, name: p.name, dob: p.dob, upiId: p.upi_id, createdAt: p.created_at });
+        if (p.linked_banks) setLinkedBanks(p.linked_banks);
       }
       const { data: txData } = await supabase.from("transactions").select("*")
         .or(`sender_phone.eq.${phone},receiver_phone.eq.${phone}`)
@@ -158,6 +165,7 @@ export default function QuantumPay() {
         setTransactions(d.transactions || []);
         setProfile({ name: d.name || "", phone });
         setUser({ phone, ...d });
+        if (d.linkedBanks) setLinkedBanks(d.linkedBanks);
       }
     }
   };
@@ -694,7 +702,20 @@ export default function QuantumPay() {
           ))}
         </div>
         <input value={note} onChange={e => setNote(e.target.value)} placeholder="Add a note (optional)" style={{ ...S.input, marginBottom: 18 }} />
-        <div onClick={() => amount && setSendStep(3)} style={S.gradBtn(!amount)}>Continue →</div>
+        {linkedBanks.length === 0 ? (
+          <div onClick={() => { setBankStep(1); setScreen("banks"); }} style={S.gradBtn(false)}>Link Bank Account to Send</div>
+        ) : (
+          <>
+            <div style={{ ...S.card, padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(16,185,129,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🏦</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>Paying from</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{linkedBanks[0].bankName} • {linkedBanks[0].accountNumber}</div>
+              </div>
+            </div>
+            <div onClick={() => amount && setSendStep(3)} style={S.gradBtn(!amount)}>Continue →</div>
+          </>
+        )}
       </>}
       {sendStep === 3 && selectedContact && <>
         <div style={{ ...S.card, padding: 20, marginBottom: 18 }}>
@@ -776,6 +797,16 @@ export default function QuantumPay() {
           </div>
         </div>
         <div style={S.label}>SELECT PAYMENT METHOD</div>
+        {linkedBanks.length > 0 && (
+          <div onClick={() => { setAddMoneyStep(3); handleAddMoney(); }} style={{ ...S.card, padding: 16, marginTop: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 14, cursor: "pointer", border: "1px solid rgba(16,185,129,0.4)" }}>
+            <div style={{ width: 46, height: 46, borderRadius: 14, background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🏦</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{linkedBanks[0].bankName}</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>{linkedBanks[0].type} • {linkedBanks[0].accountNumber}</div>
+            </div>
+            <div style={{ color: "#10b981", fontSize: 12, fontWeight: 700 }}>Primary</div>
+          </div>
+        )}
         {[
           { icon: "🏦", label: "Net Banking", sub: "HDFC, ICICI, SBI & more", color: "#06b6d4" },
           { icon: "💳", label: "Debit / Credit Card", sub: "Visa, Mastercard, RuPay", color: "#8b5cf6" },
@@ -1044,7 +1075,7 @@ export default function QuantumPay() {
         {/* Settings rows */}
         <div style={{ ...S.card, marginBottom: 16, overflow: "hidden" }}>
           {SETTINGS.map((item, i) => (
-            <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", borderBottom: i < SETTINGS.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none", cursor: "pointer" }}>
+            <div key={item.label} onClick={() => { if (item.label.includes("Linked Cards")) { setBankStep(1); setScreen("banks"); } }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", borderBottom: i < SETTINGS.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none", cursor: "pointer" }}>
               <div style={{ width: 36, height: 36, borderRadius: 11, background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>{item.icon}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{item.label}</div>
@@ -1063,6 +1094,125 @@ export default function QuantumPay() {
     );
   };
 
+  const BanksScreen = () => {
+    const handleLinkBank = async () => {
+      const newBank = {
+        id: Date.now().toString(),
+        bankName: selectedBank.label,
+        accountNumber: "XX" + Math.floor(1000 + Math.random() * 9000),
+        type: "Savings"
+      };
+      const updated = [...linkedBanks, newBank];
+      setLinkedBanks(updated);
+
+      if (cloudMode && user?.phone) {
+        await supabase.from("profiles").update({ linked_banks: updated }).eq("phone", user.phone);
+      } else if (user?.phone) {
+        const users = LocalDB.getUsers();
+        if (users[user.phone]) {
+          users[user.phone].linkedBanks = updated;
+          LocalDB.saveUsers(users);
+        }
+      }
+      setBankStep(5);
+    };
+
+    return (
+      <div style={{ padding: "16px 20px" }}>
+        {bankStep < 5 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
+            <div onClick={() => {
+              if (bankStep === 1) setScreen("profile");
+              else if (bankStep === 4) setBankStep(2);
+              else setBankStep(s => s - 1);
+            }} style={S.backBtn}>←</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>
+              {bankStep === 1 ? "Linked Banks" : "Add Bank Account"}
+            </div>
+          </div>
+        )}
+
+        {bankStep === 1 && <>
+          {linkedBanks.length === 0 ? (
+            <div style={{ padding: "40px 20px", textAlign: "center" }}>
+              <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.5 }}>🏦</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 8 }}>No Banks Linked</div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 24 }}>Link a bank account to make seamless UPI payments on QuantumPay.</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+              <div style={S.label}>YOUR LINKED ACCOUNTS</div>
+              {linkedBanks.map(b => (
+                <div key={b.id} style={{ ...S.card, padding: 16, display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🏦</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{b.bankName}</div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>{b.type} • {b.accountNumber}</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#10b981", fontWeight: 700, background: "rgba(16,185,129,0.1)", padding: "4px 8px", borderRadius: 8 }}>Primary</div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div onClick={() => setBankStep(2)} style={S.gradBtn(false)}>+ Add Bank Account</div>
+        </>}
+
+        {bankStep === 2 && <>
+          <div style={S.label}>SELECT YOUR BANK</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {[
+              { id: "sbi", label: "State Bank of India", color: "#3b82f6" },
+              { id: "hdfc", label: "HDFC Bank", color: "#0ea5e9" },
+              { id: "icici", label: "ICICI Bank", color: "#f97316" },
+              { id: "axis", label: "Axis Bank", color: "#db2777" },
+              { id: "pnb", label: "Punjab National Bank", color: "#eab308" },
+              { id: "kotak", label: "Kotak Mahindra", color: "#ef4444" }
+            ].map(b => (
+              <div key={b.id} onClick={() => {
+                setSelectedBank(b);
+                setBankStep(3);
+                setTimeout(() => setBankStep(4), 2500);
+              }} style={{ ...S.card, padding: "16px 12px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, cursor: "pointer", border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div style={{ width: 36, height: 36, borderRadius: 18, background: `${b.color}20`, color: b.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900 }}>{b.label[0]}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{b.label}</div>
+              </div>
+            ))}
+          </div>
+        </>}
+
+        {bankStep === 3 && (
+          <div style={{ padding: "60px 20px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ width: 60, height: 60, borderRadius: 30, background: "rgba(139,92,246,0.1)", border: "2px dashed #8b5cf6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, marginBottom: 24, animation: "spin 2s linear infinite" }}>🏦</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 8 }}>Fetching Bank Accounts</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>Finding accounts linked to +91 {user?.phone} at {selectedBank?.label}...</div>
+          </div>
+        )}
+
+        {bankStep === 4 && <>
+          <div style={{ ...S.card, padding: 24, textAlign: "center", marginBottom: 18 }}>
+            <div style={{ width: 50, height: 50, borderRadius: 25, background: "rgba(16,185,129,0.15)", margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>✅</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", marginBottom: 6 }}>Account Found</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>{selectedBank?.label} • Savings Account</div>
+          </div>
+          <div style={S.label}>VERIFY WITH OTP</div>
+          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 16, lineHeight: 1.4 }}>A 6-digit OTP has been sent to your registered mobile number (+91 {user?.phone}) for verification.</p>
+          <input value={bankOtp} onChange={e => setBankOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} type="password" placeholder="• • • • • •" style={{ ...S.input, marginBottom: 24, textAlign: "center", fontSize: 24, letterSpacing: 8 }} />
+          <div onClick={() => bankOtp.length === 6 && handleLinkBank()} style={S.gradBtn(bankOtp.length < 6)}>Verify & Link Account</div>
+        </>}
+
+        {bankStep === 5 && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 50 }}>
+            <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, marginBottom: 22, boxShadow: "0 0 40px rgba(16,185,129,0.3)" }}>✓</div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 8 }}>Bank Linked!</div>
+            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 32, textAlign: "center", padding: "0 20px" }}>You can now use your {selectedBank?.label} account for seamless UPI payments.</div>
+            <div onClick={() => { setBankStep(1); setBankOtp(""); }} style={S.gradBtn(false)}>View Linked Banks</div>
+          </div>
+        )}
+
+      </div>
+    );
+  };
+
 
   const renderScreen = () => {
     if (screen === "send") return SendScreen();
@@ -1072,6 +1222,7 @@ export default function QuantumPay() {
     if (screen === "bills") return BillsScreen();
     if (screen === "addmoney") return AddMoneyScreen();
     if (screen === "profile") return ProfileScreen();
+    if (screen === "banks") return BanksScreen();
     return HomeScreen();
   };
 
