@@ -268,11 +268,18 @@ export default function QuantumPay() {
       if (!/^\d{10}$/.test(loginPhone)) { setLoginError("Enter a valid 10-digit phone number"); setLoginMpin(""); return; }
       const hashedVal = await hashMpin(val);
       if (cloudMode) {
-        // Authenticate via Supabase Auth
+        // Try Supabase Auth first
         const { error } = await signInUser(loginPhone, hashedVal);
         if (error) {
-          const msg = error.message.includes("Invalid login") ? "Wrong phone or MPIN. Please try again." : error.message;
-          setLoginError(msg); setLoginMpin(""); return;
+          // Fallback: check MPIN directly in profiles (for pre-auth accounts)
+          const { data } = await supabase.from("profiles").select("*").eq("phone", loginPhone).single();
+          if (!data) { setLoginError("Phone not registered. Please sign up."); setLoginMpin(""); return; }
+          if (data.mpin !== hashedVal) { setLoginError("Wrong MPIN. Please try again."); setLoginMpin(""); return; }
+          // Auto-migrate: create Supabase Auth account for old user
+          const { data: authData } = await signUpUser(loginPhone, hashedVal);
+          if (authData?.user?.id) {
+            await supabase.from("profiles").update({ user_id: authData.user.id }).eq("phone", loginPhone);
+          }
         }
       } else {
         const userData = LocalDB.getUsers()[loginPhone];
