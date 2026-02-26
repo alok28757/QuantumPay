@@ -131,6 +131,7 @@ export default function QuantumPay() {
   const [bankStep, setBankStep] = useState(1);
   const [selectedBank, setSelectedBank] = useState(null);
   const [bankOtp, setBankOtp] = useState("");
+  const [selectedTx, setSelectedTx] = useState(null);
 
   // ─── DUAL-MODE DATA LAYER ────────────────────────────────────────────────
   const loadUserData = async (phone, isCloud) => {
@@ -536,7 +537,7 @@ export default function QuantumPay() {
   );
 
   const TxRow = ({ tx }) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+    <div onClick={() => setSelectedTx(tx)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}>
       <div style={{ width: 44, height: 44, borderRadius: 22, background: tx.type === "received" ? "rgba(74,222,128,0.12)" : "rgba(244,63,94,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
         {contacts.find(c => c.name === tx.name)?.avatar || (tx.type === "received" ? "💰" : "🏢")}
       </div>
@@ -1213,6 +1214,58 @@ export default function QuantumPay() {
     );
   };
 
+  const TransactionReceipt = () => {
+    if (!selectedTx) return null;
+    const isRx = selectedTx.type === "received";
+    // Mock data for realism
+    const bankRef = "BRN" + Math.floor(100000000 + Math.random() * 900000000);
+    const txId = "QP" + (selectedTx.id?.toString() || Date.now().toString().slice(-8));
+
+    return (
+      <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", minHeight: "100%", boxSizing: "border-box", background: "#0a0a18" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 30 }}>
+          <div onClick={() => setSelectedTx(null)} style={S.backBtn}>✕</div>
+          <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Receipt</div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 30 }}>
+          <div style={{ width: 80, height: 80, borderRadius: 40, background: isRx ? "rgba(74,222,128,0.15)" : "rgba(244,63,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, marginBottom: 16 }}>
+            {isRx ? "↓" : "↑"}
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,0.6)", marginBottom: 8 }}>{isRx ? "Received from" : "Paid to"}</div>
+          <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 12 }}>{selectedTx.name}</div>
+          <div style={{ fontSize: 40, fontWeight: 900, color: isRx ? "#4ade80" : "#f43f5e", marginBottom: 4 }}>
+            {isRx ? "+" : "−"}₹{selectedTx.amount.toLocaleString("en-IN")}
+          </div>
+          <div style={{ fontSize: 14, color: isRx ? "#4ade80" : "#f43f5e", display: "flex", alignItems: "center", gap: 6, background: isRx ? "rgba(74,222,128,0.1)" : "rgba(244,63,94,0.1)", padding: "4px 12px", borderRadius: 12 }}>
+            <span style={{ fontWeight: 900 }}>✓</span> {isRx ? "Received Successfully" : "Paid Successfully"}
+          </div>
+        </div>
+
+        <div style={{ ...S.card, padding: 20, marginBottom: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 16 }}>Transaction Details</div>
+          {[
+            { label: "Date & Time", value: selectedTx.time || new Date().toLocaleString("en-IN", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) },
+            { label: "Transaction ID", value: txId },
+            { label: "Bank Reference No.", value: bankRef },
+            { label: "Payment Method", value: linkedBanks.length > 0 ? `${linkedBanks[0].bankName} UPI` : "QuantumPay Wallet" }
+          ].map((row, i, arr) => (
+            <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>{row.label}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", textAlign: "right", maxWidth: "60%" }}>{row.value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ flex: 1 }} />
+        <div onClick={() => alert("Mock: Receipt sharing opened")} style={{ ...S.gradBtn(false), background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.4)", color: "#a78bfa" }}>
+          📤 Share Receipt
+        </div>
+        <div style={{ textAlign: "center", marginTop: 24, paddingBottom: 20, fontSize: 12, color: "rgba(255,255,255,0.2)", fontWeight: 700, letterSpacing: 1 }}>POWERED BY QUANTUMPAY</div>
+      </div>
+    );
+  };
+
 
   const renderScreen = () => {
     if (screen === "send") return SendScreen();
@@ -1233,7 +1286,9 @@ export default function QuantumPay() {
         <span style={{ fontSize: 11, fontWeight: 900, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 2 }}>⚛ QUANTUMPAY</span>
         <span>🔋</span>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" }}>{renderScreen()}</div>
+      <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none", position: "relative" }}>
+        {selectedTx ? <TransactionReceipt /> : renderScreen()}
+      </div>
       <div style={{ background: "rgba(10,10,24,0.97)", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-around", padding: "10px 0 18px", flexShrink: 0 }}>
         {[["🏠", "Home", "home"], ["💰", "Pay", "send"], ["🔍", "Scan", "scan"], ["📋", "History", "history"]].map(([icon, label, key]) => (
           <div key={key} onClick={() => { if (key === "send") setSendStep(1); setScreen(key); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", opacity: screen === key ? 1 : 0.55 }}>
