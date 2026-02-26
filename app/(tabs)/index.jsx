@@ -1070,7 +1070,7 @@ export default function QuantumPay() {
       </div>
       <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" }}>{renderScreen()}</div>
       <div style={{ background: "rgba(10,10,24,0.97)", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-around", padding: "10px 0 18px", flexShrink: 0 }}>
-        {[["🏠", "Home", "home"], ["�", "Pay", "send"], ["�", "Scan", "scan"], ["📋", "History", "history"]].map(([icon, label, key]) => (
+        {[["🏠", "Home", "home"], ["💰", "Pay", "send"], ["🔍", "Scan", "scan"], ["📋", "History", "history"]].map(([icon, label, key]) => (
           <div key={key} onClick={() => { if (key === "send") setSendStep(1); setScreen(key); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", opacity: screen === key ? 1 : 0.55 }}>
             <span style={{ fontSize: 20 }}>{icon}</span>
             <span style={{ fontSize: 10, color: screen === key ? "#8b5cf6" : "rgba(255,255,255,0.5)", fontWeight: screen === key ? 800 : 600 }}>{label}</span>
