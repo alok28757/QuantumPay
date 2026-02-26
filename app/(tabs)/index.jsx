@@ -154,6 +154,17 @@ export default function QuantumPay() {
   const [scanError, setScanError] = useState("");
   const [scanning, setScanning] = useState(false);
 
+  // Cleanup scanner on tab switch or unmount
+  useEffect(() => {
+    return () => {
+      if (scannerInstanceRef.current) {
+        scannerInstanceRef.current.stop().catch(() => { });
+        scannerInstanceRef.current = null;
+      }
+      setScanning(false);
+    };
+  }, [scanTab]);
+
   // ─── DUAL-MODE DATA LAYER ────────────────────────────────────────────────
   const loadUserData = async (phone, isCloud) => {
     const cloud = isCloud !== undefined ? isCloud : cloudMode;
@@ -900,9 +911,6 @@ export default function QuantumPay() {
       }
       setScanning(false);
     };
-
-    // Cleanup on tab switch or unmount
-    useEffect(() => { return () => stopScanner(); }, [scanTab]);
 
     return (
       <div style={{ padding: "16px 20px" }}>
