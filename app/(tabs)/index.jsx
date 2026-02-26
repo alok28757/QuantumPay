@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { decryptTransaction, encryptTransaction, generatePQCKeys, getPQCPrivateKey, hashMpin, signTransaction, storePQCPrivateKey } from "../../lib/crypto";
-import { supabase } from "../../lib/supabase";
+import { getSession, signInUser, signOutUser, signUpUser, supabase } from "../../lib/supabase";
 
 // ─── SESSION HELPER (per-tab) ────────────────────────────────────────────────
 const Session = {
@@ -173,8 +173,9 @@ export default function QuantumPay() {
       const phone = Session.get();
       if (phone) {
         if (isCloud) {
-          const { data } = await supabase.from("profiles").select("phone").eq("phone", phone).single();
-          if (data) { await loadUserData(phone, true); setAuthStep("app"); }
+          // Check for existing Supabase Auth session
+          const session = await getSession();
+          if (session) { await loadUserData(phone, true); setAuthStep("app"); }
         } else {
           if (LocalDB.getUsers()[phone]) { await loadUserData(phone, false); setAuthStep("app"); }
         }
@@ -242,7 +243,12 @@ export default function QuantumPay() {
       const pqcKeys = generatePQCKeys();
       storePQCPrivateKey(regPhone, pqcKeys.privateKey);
       if (cloudMode) {
-        const { error } = await supabase.from("profiles").insert({ phone: regPhone, name: regName, dob: regDob, upi_id: regUpi, mpin: hashedPin, balance: 0, public_key: pqcKeys.publicKey });
+        // 1. Create Supabase Auth account
+        const { data: authData, error: authErr } = await signUpUser(regPhone, hashedPin);
+        if (authErr) { setRegError("Registration failed: " + authErr.message); return; }
+        const userId = authData?.user?.id;
+        // 2. Insert profile with user_id link
+        const { error } = await supabase.from("profiles").insert({ phone: regPhone, name: regName, dob: regDob, upi_id: regUpi, mpin: hashedPin, balance: 0, public_key: pqcKeys.publicKey, user_id: userId });
         if (error) { setRegError("Registration failed: " + error.message); return; }
       } else {
         const users = LocalDB.getUsers();
@@ -262,9 +268,12 @@ export default function QuantumPay() {
       if (!/^\d{10}$/.test(loginPhone)) { setLoginError("Enter a valid 10-digit phone number"); setLoginMpin(""); return; }
       const hashedVal = await hashMpin(val);
       if (cloudMode) {
-        const { data } = await supabase.from("profiles").select("*").eq("phone", loginPhone).single();
-        if (!data) { setLoginError("Phone not registered. Please sign up."); setLoginMpin(""); return; }
-        if (data.mpin !== hashedVal) { setLoginError("Wrong MPIN. Please try again."); setLoginMpin(""); return; }
+        // Authenticate via Supabase Auth
+        const { error } = await signInUser(loginPhone, hashedVal);
+        if (error) {
+          const msg = error.message.includes("Invalid login") ? "Wrong phone or MPIN. Please try again." : error.message;
+          setLoginError(msg); setLoginMpin(""); return;
+        }
       } else {
         const userData = LocalDB.getUsers()[loginPhone];
         if (!userData) { setLoginError("Phone not registered. Please sign up."); setLoginMpin(""); return; }
@@ -276,7 +285,8 @@ export default function QuantumPay() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (cloudMode) await signOutUser();
     Session.clear();
     setUser(null); setProfile({ name: "", phone: "" }); setBalance(0); setTransactions([]);
     setLoginPhone(""); setLoginMpin(""); setLoginError("");
