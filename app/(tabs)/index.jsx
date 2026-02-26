@@ -35,14 +35,8 @@ const checkSupabase = async () => {
   } catch { return false; }
 };
 
-const CONTACTS = [
-  { id: 1, name: "Priya Sharma", upi: "priya@upi", avatar: "👩", color: "#8b5cf6" },
-  { id: 2, name: "Rahul Dev", upi: "rahul@upi", avatar: "👨‍💻", color: "#06b6d4" },
-  { id: 3, name: "Ananya K", upi: "ananya@upi", avatar: "👩‍🎓", color: "#f43f5e" },
-  { id: 4, name: "Vikram S", upi: "vikram@upi", avatar: "🧑‍💼", color: "#10b981" },
-  { id: 5, name: "Deepa R", upi: "deepa@upi", avatar: "👩‍🔬", color: "#f97316" },
-  { id: 6, name: "Arjun M", upi: "arjun@upi", avatar: "🧑‍🎨", color: "#eab308" },
-];
+const AVATAR_COLORS = ["#8b5cf6", "#06b6d4", "#f43f5e", "#10b981", "#f97316", "#eab308", "#ec4899", "#3b82f6"];
+const AVATARS = ["👤", "👩", "👨", "🧑", "👩‍💻", "👨‍💻", "🧑‍💼", "👩‍🎓"];
 
 const BILLS = [
   { id: 1, icon: "⚡", name: "Electricity", color: "#f7c948" },
@@ -130,6 +124,7 @@ export default function QuantumPay() {
   const [payUpi, setPayUpi] = useState("");
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [cloudMode, setCloudMode] = useState(null);
+  const [contacts, setContacts] = useState([]);
 
   // ─── DUAL-MODE DATA LAYER ────────────────────────────────────────────────
   const loadUserData = async (phone, isCloud) => {
@@ -535,7 +530,7 @@ export default function QuantumPay() {
   const TxRow = ({ tx }) => (
     <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
       <div style={{ width: 44, height: 44, borderRadius: 22, background: tx.type === "received" ? "rgba(74,222,128,0.12)" : "rgba(244,63,94,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-        {CONTACTS.find(c => c.name === tx.name)?.avatar || (tx.type === "received" ? "💰" : "🏢")}
+        {contacts.find(c => c.name === tx.name)?.avatar || (tx.type === "received" ? "💰" : "🏢")}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.name}</div>
@@ -658,16 +653,26 @@ export default function QuantumPay() {
           </div>
         )}
         <div style={S.label}>CONTACTS</div>
-        {CONTACTS.filter(c => !upiSearch || c.name.toLowerCase().includes(upiSearch.toLowerCase()) || c.upi.includes(upiSearch.toLowerCase())).map(c => (
-          <div key={c.id} onClick={() => { setSelectedContact(c); setSendStep(2); setUpiSearch(""); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}>
-            <div style={{ width: 46, height: 46, borderRadius: 23, background: `${c.color}20`, border: `1px solid ${c.color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{c.avatar}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{c.name}</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>{c.upi}</div>
-            </div>
-            <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 20 }}>›</div>
+        {contacts.length === 0 && !upiSearch ? (
+          <div style={{ padding: "40px 20px", textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.5 }}>📱</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 8 }}>Search to Pay</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.5 }}>Find anyone on QuantumPay by searching their name or UPI ID above.</div>
           </div>
-        ))}
+        ) : contacts.filter(c => !upiSearch || c.name.toLowerCase().includes(upiSearch.toLowerCase()) || c.upi.includes(upiSearch.toLowerCase())).length === 0 ? (
+          <div style={{ padding: "30px 20px", textAlign: "center", fontSize: 13, color: "rgba(255,255,255,0.4)" }}>No contacts found matching "{upiSearch}"</div>
+        ) : (
+          contacts.filter(c => !upiSearch || c.name.toLowerCase().includes(upiSearch.toLowerCase()) || c.upi.includes(upiSearch.toLowerCase())).map(c => (
+            <div key={c.id} onClick={() => { setSelectedContact(c); setSendStep(2); setUpiSearch(""); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}>
+              <div style={{ width: 46, height: 46, borderRadius: 23, background: `${c.color}20`, border: `1px solid ${c.color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{c.avatar}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{c.name}</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>{c.upi}</div>
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 20 }}>›</div>
+            </div>
+          ))
+        )}
       </>}
       {sendStep === 2 && selectedContact && <>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
