@@ -148,6 +148,12 @@ export default function QuantumPay() {
   const [bankOtp, setBankOtp] = useState("");
   const [selectedTx, setSelectedTx] = useState(null);
 
+  // ScanScreen Hooks
+  const scannerRef = useRef(null);
+  const scannerInstanceRef = useRef(null);
+  const [scanError, setScanError] = useState("");
+  const [scanning, setScanning] = useState(false);
+
   // ─── DUAL-MODE DATA LAYER ────────────────────────────────────────────────
   const loadUserData = async (phone, isCloud) => {
     const cloud = isCloud !== undefined ? isCloud : cloudMode;
@@ -852,10 +858,6 @@ export default function QuantumPay() {
   const ScanScreen = () => {
     const qrData = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(userName)}&cu=INR`;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}&bgcolor=0d0d1f&color=8b5cf6&qzone=2`;
-    const scannerRef = useRef(null);
-    const scannerInstanceRef = useRef(null);
-    const [scanError, setScanError] = useState("");
-    const [scanning, setScanning] = useState(false);
 
     const startScanner = async () => {
       setScanError("");
