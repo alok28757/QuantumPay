@@ -1051,14 +1051,14 @@ export default function QuantumPay() {
 
 
   const renderScreen = () => {
-    if (screen === "send") return <SendScreen />;
-    if (screen === "scan") return <ScanScreen />;
-    if (screen === "history") return <HistoryScreen />;
-    if (screen === "request") return <RequestScreen />;
-    if (screen === "bills") return <BillsScreen />;
-    if (screen === "addmoney") return <AddMoneyScreen />;
-    if (screen === "profile") return <ProfileScreen />;
-    return <HomeScreen />;
+    if (screen === "send") return SendScreen();
+    if (screen === "scan") return ScanScreen();
+    if (screen === "history") return HistoryScreen();
+    if (screen === "request") return RequestScreen();
+    if (screen === "bills") return BillsScreen();
+    if (screen === "addmoney") return AddMoneyScreen();
+    if (screen === "profile") return ProfileScreen();
+    return HomeScreen();
   };
 
   return (
