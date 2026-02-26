@@ -20,6 +20,8 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const checkSupabase = async () => {
+  // Force LOCAL mode on localhost (only deployed version uses Supabase)
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) return false;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
   try {
     const controller = new AbortController();
