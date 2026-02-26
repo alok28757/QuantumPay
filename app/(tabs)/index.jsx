@@ -16,13 +16,17 @@ const LocalDB = {
 };
 
 // Quick connectivity check (3s timeout)
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
 const checkSupabase = async () => {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
     const res = await fetch(
-      "https://ygplozkbpnjszatpyeeq.supabase.co/rest/v1/profiles?select=phone&limit=1",
-      { headers: { apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlncGxvemticG5qc3phdHB5ZWVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5ODYzNjQsImV4cCI6MjA4NzU2MjM2NH0.pTYGZok6fjvl_iwQuOBB8y8phIf5irL49mub0fy_gv8" }, signal: controller.signal }
+      `${SUPABASE_URL}/rest/v1/profiles?select=phone&limit=1`,
+      { headers: { apikey: SUPABASE_ANON_KEY }, signal: controller.signal }
     );
     clearTimeout(timeout);
     return res.ok;
