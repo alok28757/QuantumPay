@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
+import { decryptTransaction, encryptTransaction, generatePQCKeys, getPQCPrivateKey, hashMpin, signTransaction, storePQCPrivateKey } from "../../lib/crypto";
 import { supabase } from "../../lib/supabase";
-import { hashMpin, encryptTransaction, decryptTransaction, generatePQCKeys, signTransaction, verifyTransaction, storePQCPrivateKey, getPQCPrivateKey } from "../../lib/crypto";
 
 // ─── SESSION HELPER (per-tab) ────────────────────────────────────────────────
 const Session = {
@@ -301,12 +301,18 @@ export default function QuantumPay() {
       await supabase.from("profiles").update({ balance: balance - amt }).eq("phone", senderPhone);
       const { data: recipient } = await supabase.from("profiles").select("phone, name").eq("upi_id", recipientUpi).single();
       if (recipient) { await supabase.rpc("increment_balance", { p_phone: recipient.phone, p_amount: amt }); }
-      // Build, encrypt, and sign transaction
+      // Build, sign, and insert TWO copies (one per party, each encrypted with their own key)
       const rawTx = { sender_phone: senderPhone, sender_name: senderName, receiver_phone: recipient?.phone || recipientUpi, receiver_name: selectedContact.name, amount: amt, note: note || "Payment" };
-      const encTx = await encryptTransaction(senderPhone, rawTx);
       const privKey = getPQCPrivateKey(senderPhone);
       const signature = privKey ? signTransaction(privKey, { sender: senderPhone, receiver: rawTx.receiver_phone, amount: amt, time: Date.now() }) : null;
-      await supabase.from("transactions").insert({ ...encTx, signature });
+      // Sender's copy (encrypted with sender's key)
+      const senderEncTx = await encryptTransaction(senderPhone, rawTx);
+      await supabase.from("transactions").insert({ ...senderEncTx, signature });
+      // Receiver's copy (encrypted with receiver's key)
+      if (recipient) {
+        const receiverEncTx = await encryptTransaction(recipient.phone, rawTx);
+        await supabase.from("transactions").insert({ ...receiverEncTx, signature });
+      }
     } else {
       const users = LocalDB.getUsers();
       users[senderPhone].balance = (users[senderPhone].balance || 0) - amt;
@@ -314,7 +320,7 @@ export default function QuantumPay() {
       const rp = Object.keys(users).find(ph => users[ph].upiId === recipientUpi);
       if (rp) {
         users[rp].balance = (users[rp].balance || 0) + amt;
-        users[rp].transactions = [{ id: Date.now()+1, name: senderName, type: "received", amount: amt, time: "Just now", note: note || "Payment from " + senderName }, ...(users[rp].transactions || [])];
+        users[rp].transactions = [{ id: Date.now() + 1, name: senderName, type: "received", amount: amt, time: "Just now", note: note || "Payment from " + senderName }, ...(users[rp].transactions || [])];
       }
       LocalDB.saveUsers(users);
     }
@@ -551,11 +557,11 @@ export default function QuantumPay() {
           <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
             <div style={{ flex: 1, background: "rgba(74,222,128,0.1)", borderRadius: 10, padding: "10px 12px" }}>
               <div style={{ fontSize: 9, color: "#4ade80", fontWeight: 700 }}>↓ RECEIVED</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginTop: 2 }}>₹2,750</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginTop: 2 }}>₹{transactions.filter(t => t.type === "received").reduce((s, t) => s + t.amount, 0).toLocaleString("en-IN")}</div>
             </div>
             <div style={{ flex: 1, background: "rgba(244,63,94,0.1)", borderRadius: 10, padding: "10px 12px" }}>
               <div style={{ fontSize: 9, color: "#f43f5e", fontWeight: 700 }}>↑ SENT</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginTop: 2 }}>₹5,040</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginTop: 2 }}>₹{transactions.filter(t => t.type === "sent").reduce((s, t) => s + t.amount, 0).toLocaleString("en-IN")}</div>
             </div>
             <div onClick={() => { setAddMoneyStep(1); navigate("addmoney"); }} style={{ flex: 1, background: "rgba(139,92,246,0.15)", borderRadius: 10, padding: "10px 12px", cursor: "pointer", border: "1px solid rgba(139,92,246,0.3)" }}>
               <div style={{ fontSize: 9, color: "#a78bfa", fontWeight: 700 }}>+ ADD</div>
