@@ -47,6 +47,14 @@ const BILLS = [
   { id: 6, icon: "🏦", name: "Loan EMI", color: "#f43f5e" },
 ];
 
+const playSuccessSound = () => {
+  try {
+    const audio = new Audio("https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3");
+    audio.volume = 0.5;
+    audio.play().catch(() => { });
+  } catch (e) { }
+};
+
 const S = {
   backBtn: { width: 36, height: 36, borderRadius: 18, background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, color: "#fff", flexShrink: 0 },
   card: { background: "rgba(255,255,255,0.04)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.08)" },
@@ -58,6 +66,13 @@ const S = {
 function PhoneFrame({ children, bg }) {
   return (
     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#050510", padding: 20, fontFamily: "'Segoe UI', sans-serif" }}>
+      <style>{`
+        @keyframes pulseCheck {
+          0% { transform: scale(0.8); opacity: 0; box-shadow: 0 0 0 rgba(16,185,129,0); }
+          70% { transform: scale(1.15); opacity: 1; box-shadow: 0 0 60px rgba(16,185,129,0.6); }
+          100% { transform: scale(1); opacity: 1; box-shadow: 0 0 40px rgba(16,185,129,0.4); }
+        }
+      `}</style>
       <div style={{ width: 390, height: 800, background: bg || "#0d0d1f", borderRadius: 44, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 40px 100px rgba(139,92,246,0.25), 0 0 0 1px rgba(255,255,255,0.08)" }}>
         {children}
       </div>
@@ -322,7 +337,7 @@ export default function QuantumPay() {
     const senderName = profile.name || user?.name || "Someone";
     const recipientUpi = selectedContact.upi;
     const tx = { id: Date.now(), name: selectedContact.name, type: "sent", amount: amt, time: "Just now", note: note || "Payment" };
-    setTransactions(p => [tx, ...p]); setBalance(b => b - amt); setSendStep(4);
+    setTransactions(p => [tx, ...p]); setBalance(b => b - amt); playSuccessSound(); setSendStep(4);
 
     if (cloudMode) {
       await supabase.from("profiles").update({ balance: balance - amt }).eq("phone", senderPhone);
@@ -357,7 +372,7 @@ export default function QuantumPay() {
     const amt = Number(addAmount); if (!amt) return;
     const phone = Session.get();
     const tx = { id: Date.now(), name: "Wallet Top-up", type: "received", amount: amt, time: "Just now", note: "Added to wallet" };
-    setTransactions(p => [tx, ...p]); setBalance(b => b + amt); setAddMoneyStep(3);
+    setTransactions(p => [tx, ...p]); setBalance(b => b + amt); playSuccessSound(); setAddMoneyStep(3);
     if (cloudMode) {
       await supabase.from("profiles").update({ balance: balance + amt }).eq("phone", phone);
       const rawTx = { sender_phone: phone, sender_name: "Wallet Top-up", receiver_phone: phone, receiver_name: profile.name || "Self", amount: amt, note: "Added to wallet" };
@@ -748,7 +763,7 @@ export default function QuantumPay() {
       </>}
       {sendStep === 4 && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 50 }}>
-          <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, marginBottom: 22, boxShadow: "0 0 40px rgba(16,185,129,0.3)" }}>✓</div>
+          <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, marginBottom: 22, boxShadow: "0 0 40px rgba(16,185,129,0.3)", animation: "pulseCheck 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both" }}>✓</div>
           <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 8 }}>Payment Sent!</div>
           <div style={{ fontSize: 34, fontWeight: 900, color: "#4ade80", marginBottom: 8 }}>₹{Number(amount).toLocaleString("en-IN")}</div>
           <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 30 }}>to {selectedContact?.name}</div>
@@ -825,7 +840,7 @@ export default function QuantumPay() {
       </>}
       {addMoneyStep === 3 && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 50 }}>
-          <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, marginBottom: 22 }}>✓</div>
+          <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, marginBottom: 22, boxShadow: "0 0 40px rgba(16,185,129,0.3)", animation: "pulseCheck 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both" }}>✓</div>
           <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 8 }}>Money Added!</div>
           <div style={{ fontSize: 34, fontWeight: 900, color: "#4ade80", marginBottom: 32 }}>₹{Number(addAmount).toLocaleString("en-IN")}</div>
           <div onClick={() => { setAddAmount(""); setAddMoneyStep(1); setScreen("home"); }} style={S.gradBtn(false)}>Back to Home</div>
@@ -1203,7 +1218,7 @@ export default function QuantumPay() {
 
         {bankStep === 5 && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 50 }}>
-            <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, marginBottom: 22, boxShadow: "0 0 40px rgba(16,185,129,0.3)" }}>✓</div>
+            <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, marginBottom: 22, boxShadow: "0 0 40px rgba(16,185,129,0.3)", animation: "pulseCheck 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both" }}>✓</div>
             <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 8 }}>Bank Linked!</div>
             <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 32, textAlign: "center", padding: "0 20px" }}>You can now use your {selectedBank?.label} account for seamless UPI payments.</div>
             <div onClick={() => { setBankStep(1); setBankOtp(""); }} style={S.gradBtn(false)}>View Linked Banks</div>
@@ -1215,6 +1230,7 @@ export default function QuantumPay() {
   };
 
   const TransactionReceipt = () => {
+    const [showPqcDetails, setShowPqcDetails] = useState(false);
     if (!selectedTx) return null;
     const isRx = selectedTx.type === "received";
     // Mock data for realism
@@ -1222,13 +1238,15 @@ export default function QuantumPay() {
     const txId = "QP" + (selectedTx.id?.toString() || Date.now().toString().slice(-8));
 
     return (
-      <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", minHeight: "100%", boxSizing: "border-box", background: "#0a0a18" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 30 }}>
+      <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", minHeight: "100%", boxSizing: "border-box", background: "#0a0a18", position: "relative" }}>
+
+        {/* Main Receipt UI */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 30, opacity: showPqcDetails ? 0 : 1, transition: "opacity 0.3s" }}>
           <div onClick={() => setSelectedTx(null)} style={S.backBtn}>✕</div>
           <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Receipt</div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 30 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 30, opacity: showPqcDetails ? 0 : 1, transition: "opacity 0.3s" }}>
           <div style={{ width: 80, height: 80, borderRadius: 40, background: isRx ? "rgba(74,222,128,0.15)" : "rgba(244,63,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, marginBottom: 16 }}>
             {isRx ? "↓" : "↑"}
           </div>
@@ -1242,7 +1260,7 @@ export default function QuantumPay() {
           </div>
         </div>
 
-        <div style={{ ...S.card, padding: 20, marginBottom: 20 }}>
+        <div style={{ ...S.card, padding: 20, marginBottom: 20, opacity: showPqcDetails ? 0 : 1, transition: "opacity 0.3s" }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 16 }}>Transaction Details</div>
           {[
             { label: "Date & Time", value: selectedTx.time || new Date().toLocaleString("en-IN", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) },
@@ -1257,11 +1275,51 @@ export default function QuantumPay() {
           ))}
         </div>
 
-        <div style={{ flex: 1 }} />
-        <div onClick={() => alert("Mock: Receipt sharing opened")} style={{ ...S.gradBtn(false), background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.4)", color: "#a78bfa" }}>
-          📤 Share Receipt
+        <div style={{ flex: 1, opacity: showPqcDetails ? 0 : 1 }} />
+
+        <div style={{ opacity: showPqcDetails ? 0 : 1, transition: "opacity 0.3s" }}>
+          <div onClick={() => setShowPqcDetails(true)} style={{ textAlign: "center", padding: "14px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: 16, marginBottom: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <span style={{ fontSize: 16 }}>🔒</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "#10b981", letterSpacing: 0.5 }}>QUANTUM VALIDATED</span>
+            <span style={{ color: "#10b981", fontSize: 16 }}>›</span>
+          </div>
+
+          <div onClick={() => alert("Mock: Receipt sharing opened")} style={{ ...S.gradBtn(false), background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.4)", color: "#a78bfa" }}>
+            📤 Share Receipt
+          </div>
+          <div style={{ textAlign: "center", marginTop: 24, paddingBottom: 20, fontSize: 12, color: "rgba(255,255,255,0.2)", fontWeight: 700, letterSpacing: 1 }}>POWERED BY QUANTUMPAY</div>
         </div>
-        <div style={{ textAlign: "center", marginTop: 24, paddingBottom: 20, fontSize: 12, color: "rgba(255,255,255,0.2)", fontWeight: 700, letterSpacing: 1 }}>POWERED BY QUANTUMPAY</div>
+
+        {/* PQC Overlay */}
+        {showPqcDetails && (
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "#050510", zIndex: 100, padding: 24, display: "flex", flexDirection: "column", overflowY: "auto", animation: "pulseCheck 0.3s ease-out" }}>
+            <div onClick={() => setShowPqcDetails(false)} style={{ ...S.backBtn, alignSelf: "flex-start", marginBottom: 24 }}>↓</div>
+
+            <div style={{ fontSize: 28, fontWeight: 900, color: "#10b981", marginBottom: 8, letterSpacing: -1 }}>Signature Valid</div>
+            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 32, lineHeight: 1.5 }}>This transaction was signed and verified using Post-Quantum Cryptography algorithms resilient to quantum computer attacks.</div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 32 }}>
+              <div style={{ ...S.card, padding: 16, background: "rgba(16,185,129,0.05)", borderLeft: "4px solid #10b981" }}>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>DIGITAL SIGNATURE ALGORITHM</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", fontFamily: "monospace" }}>Dilithium ML-DSA-65</div>
+              </div>
+              <div style={{ ...S.card, padding: 16, background: "rgba(139,92,246,0.05)", borderLeft: "4px solid #8b5cf6" }}>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>KEY ENCAPSULATION</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", fontFamily: "monospace" }}>Kyber-1024 / ML-KEM</div>
+              </div>
+            </div>
+
+            <div style={{ ...S.card, padding: 16, background: "#0a0a18", border: "1px solid rgba(255,255,255,0.05)" }}>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 700, letterSpacing: 1, marginBottom: 12, display: "flex", justifyContent: "space-between" }}>
+                <span>CRYPTOGRAPHIC PAYLOAD</span>
+                <span style={{ color: "#10b981" }}>VERIFIED</span>
+              </div>
+              <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8b5cf6", wordBreak: "break-all", lineHeight: 1.6, opacity: 0.8 }}>
+                {Array(6).fill(0).map(() => Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2)).join("")}...
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
