@@ -1,6 +1,7 @@
+import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, setDoc, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useRef, useState } from "react";
 import { decryptTransaction, encryptTransaction, generatePQCKeys, getPQCPrivateKey, hashMpin, signTransaction, storePQCPrivateKey } from "../../lib/crypto";
-import { getSession, signInUser, signOutUser, signUpUser, supabase } from "../../lib/supabase";
+import { db, getSession, signInUser, signOutUser, signUpUser } from "../../lib/firebase";
 
 // ─── SESSION HELPER (per-tab) ────────────────────────────────────────────────
 const Session = {
@@ -16,19 +17,18 @@ const LocalDB = {
 };
 
 // Quick connectivity check (3s timeout)
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+const FIREBASE_API_KEY = process.env.EXPO_PUBLIC_FIREBASE_API_KEY || '';
+const FIREBASE_PROJECT_ID = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || '';
 
-const checkSupabase = async () => {
-  // Force LOCAL mode on localhost (only deployed version uses Supabase)
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) return false;
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
+const checkFirebase = async () => {
+  if (!FIREBASE_API_KEY || !FIREBASE_PROJECT_ID) return false;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
+    // Simple ping to Firestore REST API to check connectivity
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?select=phone&limit=1`,
-      { headers: { apikey: SUPABASE_ANON_KEY }, signal: controller.signal }
+      `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/profiles?pageSize=1`,
+      { signal: controller.signal }
     );
     clearTimeout(timeout);
     return res.ok;
@@ -174,17 +174,25 @@ export default function QuantumPay() {
   const loadUserData = async (phone, isCloud) => {
     const cloud = isCloud !== undefined ? isCloud : cloudMode;
     if (cloud) {
-      const { data: p } = await supabase.from("profiles").select("*").eq("phone", phone).single();
-      if (p) {
+      const profileRef = doc(db, "profiles", phone);
+      const docSnap = await getDoc(profileRef);
+      if (docSnap.exists()) {
+        const p = docSnap.data();
         setBalance(p.balance || 0);
         setProfile({ name: p.name || "", phone });
         setUser({ phone, name: p.name, dob: p.dob, upiId: p.upi_id, createdAt: p.created_at });
         if (p.linked_banks) setLinkedBanks(p.linked_banks);
       }
-      const { data: txData } = await supabase.from("transactions").select("*")
-        .or(`sender_phone.eq.${phone},receiver_phone.eq.${phone}`)
-        .order("created_at", { ascending: false }).limit(50);
-      if (txData) {
+
+      const txRef = collection(db, "transactions");
+      const q = query(txRef, orderBy("created_at", "desc"), limit(50)); // Filtering by phone locally as Firestore requires complex composite indices for OR queries
+      const querySnapshot = await getDocs(q);
+
+      const txData = querySnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(tx => tx.sender_phone === phone || tx.receiver_phone === phone);
+
+      if (txData.length > 0) {
         const decrypted = await Promise.all(txData.map(tx => tx.encrypted ? decryptTransaction(phone, tx) : Promise.resolve(tx)));
         setTransactions(decrypted.map(tx => ({
           id: tx.id,
@@ -210,13 +218,13 @@ export default function QuantumPay() {
 
   useEffect(() => {
     const init = async () => {
-      const isCloud = await checkSupabase();
+      const isCloud = await checkFirebase();
       setCloudMode(isCloud);
       console.log("QuantumPay mode:", isCloud ? "☁️ CLOUD" : "💾 LOCAL");
       const phone = Session.get();
       if (phone) {
         if (isCloud) {
-          // Check for existing Supabase Auth session
+          // Check for existing Firebase Auth session (Firebase restores it automatically in the background)
           const session = await getSession();
           if (session) { await loadUserData(phone, true); setAuthStep("app"); }
         } else {
@@ -224,12 +232,19 @@ export default function QuantumPay() {
         }
       }
       if (isCloud) {
-        const ch = supabase.channel("tx-live")
-          .on("postgres_changes", { event: "INSERT", schema: "public", table: "transactions" }, (payload) => {
-            const cp = Session.get();
-            if (cp && (payload.new.sender_phone === cp || payload.new.receiver_phone === cp)) loadUserData(cp, true);
-          }).subscribe();
-        return () => supabase.removeChannel(ch);
+        const txRef = collection(db, "transactions");
+        const unsubscribe = onSnapshot(txRef, (snapshot) => {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === "added") {
+              const tx = change.doc.data();
+              const cp = Session.get();
+              if (cp && (tx.sender_phone === cp || tx.receiver_phone === cp)) {
+                loadUserData(cp, true);
+              }
+            }
+          });
+        });
+        return () => unsubscribe();
       } else {
         const h = (e) => { if (e.key === "qp_users") { const cp = Session.get(); if (cp) loadUserData(cp, false); } };
         window.addEventListener("storage", h);
@@ -245,8 +260,9 @@ export default function QuantumPay() {
   const handleRegisterPhone = async () => {
     if (!/^\d{10}$/.test(regPhone)) { setRegError("Enter a valid 10-digit phone number"); return; }
     if (cloudMode) {
-      const { data } = await supabase.from("profiles").select("phone").eq("phone", regPhone).single();
-      if (data) { setRegError("Already registered. Please login."); return; }
+      const docRef = doc(db, "profiles", regPhone);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) { setRegError("Already registered. Please login."); return; }
     } else {
       if (LocalDB.getUsers()[regPhone]) { setRegError("Already registered. Please login."); return; }
     }
@@ -264,8 +280,9 @@ export default function QuantumPay() {
   const handleRegisterUpi = async () => {
     if (!regUpi.includes("@")) { setRegError("UPI ID must contain @"); return; }
     if (cloudMode) {
-      const { data } = await supabase.from("profiles").select("upi_id").eq("upi_id", regUpi).single();
-      if (data) { setRegError("This UPI ID is already taken."); return; }
+      const q = query(collection(db, "profiles"), where("upi_id", "==", regUpi), limit(1));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) { setRegError("This UPI ID is already taken."); return; }
     } else {
       const users = LocalDB.getUsers();
       if (Object.values(users).some(u => u.upiId === regUpi)) { setRegError("This UPI ID is already taken."); return; }
@@ -286,13 +303,14 @@ export default function QuantumPay() {
       const pqcKeys = generatePQCKeys();
       storePQCPrivateKey(regPhone, pqcKeys.privateKey);
       if (cloudMode) {
-        // 1. Create Supabase Auth account
+        // 1. Create Firebase Auth account
         const { data: authData, error: authErr } = await signUpUser(regPhone, hashedPin);
         if (authErr) { setRegError("Registration failed: " + authErr.message); return; }
-        const userId = authData?.user?.id;
+        const userId = authData?.user?.uid;
         // 2. Insert profile with user_id link
-        const { error } = await supabase.from("profiles").insert({ phone: regPhone, name: regName, dob: regDob, upi_id: regUpi, mpin: hashedPin, balance: 0, public_key: pqcKeys.publicKey, user_id: userId });
-        if (error) { setRegError("Registration failed: " + error.message); return; }
+        try {
+          await setDoc(doc(db, "profiles", regPhone), { phone: regPhone, name: regName, dob: regDob, upi_id: regUpi, mpin: hashedPin, balance: 0, public_key: pqcKeys.publicKey, user_id: userId, created_at: new Date().toISOString() });
+        } catch (error) { setRegError("Registration failed: " + error.message); return; }
       } else {
         const users = LocalDB.getUsers();
         users[regPhone] = { name: regName, dob: regDob, upiId: regUpi, mpin: hashedPin, balance: 0, transactions: [], createdAt: new Date().toISOString(), publicKey: pqcKeys.publicKey };
@@ -311,17 +329,19 @@ export default function QuantumPay() {
       if (!/^\d{10}$/.test(loginPhone)) { setLoginError("Enter a valid 10-digit phone number"); setLoginMpin(""); return; }
       const hashedVal = await hashMpin(val);
       if (cloudMode) {
-        // Try Supabase Auth first
+        // Try Firebase Auth first
         const { error } = await signInUser(loginPhone, hashedVal);
         if (error) {
           // Fallback: check MPIN directly in profiles (for pre-auth accounts)
-          const { data } = await supabase.from("profiles").select("*").eq("phone", loginPhone).single();
-          if (!data) { setLoginError("Phone not registered. Please sign up."); setLoginMpin(""); return; }
+          const docRef = doc(db, "profiles", loginPhone);
+          const docSnap = await getDoc(docRef);
+          if (!docSnap.exists()) { setLoginError("Phone not registered. Please sign up."); setLoginMpin(""); return; }
+          const data = docSnap.data();
           if (data.mpin !== hashedVal) { setLoginError("Wrong MPIN. Please try again."); setLoginMpin(""); return; }
-          // Auto-migrate: create Supabase Auth account for old user
+          // Auto-migrate: create Firebase Auth account for old user
           const { data: authData } = await signUpUser(loginPhone, hashedVal);
-          if (authData?.user?.id) {
-            await supabase.from("profiles").update({ user_id: authData.user.id }).eq("phone", loginPhone);
+          if (authData?.user?.uid) {
+            await updateDoc(docRef, { user_id: authData.user.uid });
           }
         }
       } else {
@@ -347,7 +367,7 @@ export default function QuantumPay() {
   const handleSaveProfile = async () => {
     const phone = Session.get();
     if (phone) {
-      if (cloudMode) { await supabase.from("profiles").update({ name: profile.name }).eq("phone", phone); }
+      if (cloudMode) { await updateDoc(doc(db, "profiles", phone), { name: profile.name }); }
       else { const users = LocalDB.getUsers(); if (users[phone]) { users[phone].name = profile.name; LocalDB.saveUsers(users); } }
     }
     setProfileSaved(true); setTimeout(() => setProfileSaved(false), 2000);
@@ -362,20 +382,39 @@ export default function QuantumPay() {
     setTransactions(p => [tx, ...p]); setBalance(b => b - amt); playSuccessSound(); setSendStep(4);
 
     if (cloudMode) {
-      await supabase.from("profiles").update({ balance: balance - amt }).eq("phone", senderPhone);
-      const { data: recipient } = await supabase.from("profiles").select("phone, name").eq("upi_id", recipientUpi).single();
-      if (recipient) { await supabase.rpc("increment_balance", { p_phone: recipient.phone, p_amount: amt }); }
+      await runTransaction(db, async (transaction) => {
+        const senderRef = doc(db, "profiles", senderPhone);
+        const senderDoc = await transaction.get(senderRef);
+        if (!senderDoc.exists()) throw new Error("Sender not found");
+
+        transaction.update(senderRef, { balance: senderDoc.data().balance - amt });
+
+        const recipientQ = query(collection(db, "profiles"), where("upi_id", "==", recipientUpi), limit(1));
+        const recipientSnap = await getDocs(recipientQ);
+        if (!recipientSnap.empty) {
+          const recipientRef = doc(db, "profiles", recipientSnap.docs[0].id);
+          const recipientDoc = await transaction.get(recipientRef);
+          if (recipientDoc.exists()) {
+            transaction.update(recipientRef, { balance: recipientDoc.data().balance + amt });
+          }
+        }
+      });
+
+      const recipientQSingle = query(collection(db, "profiles"), where("upi_id", "==", recipientUpi), limit(1));
+      const recipientSnapSingle = await getDocs(recipientQSingle);
+      const recipientPhone = !recipientSnapSingle.empty ? recipientSnapSingle.docs[0].data().phone : recipientUpi;
+
       // Build, sign, and insert TWO copies (one per party, each encrypted with their own key)
-      const rawTx = { sender_phone: senderPhone, sender_name: senderName, receiver_phone: recipient?.phone || recipientUpi, receiver_name: selectedContact.name, amount: amt, note: note || "Payment" };
+      const rawTx = { sender_phone: senderPhone, sender_name: senderName, receiver_phone: recipientPhone, receiver_name: selectedContact.name, amount: amt, note: note || "Payment", created_at: new Date().toISOString() };
       const privKey = getPQCPrivateKey(senderPhone);
       const signature = privKey ? signTransaction(privKey, { sender: senderPhone, receiver: rawTx.receiver_phone, amount: amt, time: Date.now() }) : null;
       // Sender's copy (encrypted with sender's key)
       const senderEncTx = await encryptTransaction(senderPhone, rawTx);
-      await supabase.from("transactions").insert({ ...senderEncTx, signature });
+      await setDoc(doc(collection(db, "transactions")), { ...senderEncTx, signature, created_at: rawTx.created_at });
       // Receiver's copy (encrypted with receiver's key)
-      if (recipient) {
-        const receiverEncTx = await encryptTransaction(recipient.phone, rawTx);
-        await supabase.from("transactions").insert({ ...receiverEncTx, signature });
+      if (!recipientSnapSingle.empty) {
+        const receiverEncTx = await encryptTransaction(recipientPhone, rawTx);
+        await setDoc(doc(collection(db, "transactions")), { ...receiverEncTx, signature, created_at: rawTx.created_at });
       }
     } else {
       const users = LocalDB.getUsers();
@@ -396,10 +435,11 @@ export default function QuantumPay() {
     const tx = { id: Date.now(), name: "Wallet Top-up", type: "received", amount: amt, time: "Just now", note: "Added to wallet" };
     setTransactions(p => [tx, ...p]); setBalance(b => b + amt); playSuccessSound(); setAddMoneyStep(3);
     if (cloudMode) {
-      await supabase.from("profiles").update({ balance: balance + amt }).eq("phone", phone);
-      const rawTx = { sender_phone: phone, sender_name: "Wallet Top-up", receiver_phone: phone, receiver_name: profile.name || "Self", amount: amt, note: "Added to wallet" };
+      const phoneRef = doc(db, "profiles", phone);
+      await updateDoc(phoneRef, { balance: balance + amt });
+      const rawTx = { sender_phone: phone, sender_name: "Wallet Top-up", receiver_phone: phone, receiver_name: profile.name || "Self", amount: amt, note: "Added to wallet", created_at: new Date().toISOString() };
       const encTx = await encryptTransaction(phone, rawTx);
-      await supabase.from("transactions").insert(encTx);
+      await setDoc(doc(collection(db, "transactions")), { ...encTx, created_at: rawTx.created_at });
     } else {
       const users = LocalDB.getUsers();
       users[phone].balance = (users[phone].balance || 0) + amt;
@@ -1184,7 +1224,7 @@ export default function QuantumPay() {
       setLinkedBanks(updated);
 
       if (cloudMode && user?.phone) {
-        await supabase.from("profiles").update({ linked_banks: updated }).eq("phone", user.phone);
+        await updateDoc(doc(db, "profiles", user.phone), { linked_banks: updated });
       } else if (user?.phone) {
         const users = LocalDB.getUsers();
         if (users[user.phone]) {
