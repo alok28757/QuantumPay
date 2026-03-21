@@ -1,0 +1,33 @@
+{
+  "cli": {
+    "version": ">= 18.1.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyC-wPYi_FzB1L-CzQUMewC3R58A-7QeMR8",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "quamtumpay.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "quamtumpay",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "quamtumpay.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "370558997052",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:370558997052:web:473e20d4847da6f79ae939",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-YM2TKQ2YTK"
+      },
+      "distribution": "internal"
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
