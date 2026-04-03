@@ -1,10 +1,10 @@
 // QuantumPay — Profile screen
 import { S } from '../constants/styles';
-import { ArrowLeft, Zap, Check, ChevronRight, LogOut, Bell, Lock, CreditCard, CircleHelp, FileText, Cake, Calendar, Smartphone } from 'lucide-react';
+import { ArrowLeft, Zap, ChevronRight, LogOut, Bell, Lock, CreditCard, CircleHelp, FileText, Cake, Calendar, Smartphone } from 'lucide-react';
 
 export default function ProfileScreen({
-  userName, userInitial, upiId, user, profile, setProfile,
-  transactions, profileSaved, handleSaveProfile, handleLogout,
+  userName, userInitial, upiId, user, profile,
+  transactions, handleLogout,
   goBack, setBankStep, setScreen, linkedBanks,
 }) {
   const totalSent = transactions.filter(t => t.type === "sent").reduce((s, t) => s + t.amount, 0);
@@ -63,15 +63,6 @@ export default function ProfileScreen({
         ))}
       </div>
 
-      {/* Edit display name */}
-      <div style={{ ...S.card, padding: 18, marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: "#8b5cf6", marginBottom: 14, letterSpacing: 0.5 }}>EDIT DISPLAY NAME</div>
-        <div style={S.label}>FULL NAME</div>
-        <input value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))} placeholder={userName} style={{ ...S.input, marginBottom: 14 }} />
-        <div onClick={handleSaveProfile} style={{ ...S.gradBtn(false), fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-          {profileSaved ? <><Check size={16} /> Saved!</> : "Save Changes"}
-        </div>
-      </div>
 
       {/* Settings rows */}
       <div style={{ ...S.card, marginBottom: 16, overflow: "hidden" }}>

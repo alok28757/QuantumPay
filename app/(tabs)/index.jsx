@@ -50,7 +50,6 @@ export default function QuantumPay() {
 
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState({ name: "", phone: "" });
-  const [profileSaved, setProfileSaved] = useState(false);
   const [screen, setScreen] = useState("home");
   const [prevScreen, setPrevScreen] = useState("home");
   const [balance, setBalance] = useState(0);
@@ -275,14 +274,6 @@ export default function QuantumPay() {
   // ═══════════════════════════════════════════════════════════════════════════
   // APP HANDLERS
   // ═══════════════════════════════════════════════════════════════════════════
-  const handleSaveProfile = async () => {
-    const phone = Session.get();
-    if (phone) {
-      if (cloudMode) { await updateDoc(doc(db, "profiles", phone), { name: profile.name }); }
-      else { const users = LocalDB.getUsers(); if (users[phone]) { users[phone].name = profile.name; LocalDB.saveUsers(users); } }
-    }
-    setProfileSaved(true); setTimeout(() => setProfileSaved(false), 2000);
-  };
 
   const handleSend = async () => {
     if (!selectedContact) return;
@@ -382,7 +373,7 @@ export default function QuantumPay() {
     if (screen === "request") return <RequestScreen upiId={upiId} user={user} profile={profile} goBack={goBack} />;
     if (screen === "bills") return <BillsScreen goBack={goBack} />;
     if (screen === "addmoney") return <AddMoneyScreen addMoneyStep={addMoneyStep} setAddMoneyStep={setAddMoneyStep} addAmount={addAmount} setAddAmount={setAddAmount} balance={balance} linkedBanks={linkedBanks} goBack={goBack} handleAddMoney={handleAddMoney} setScreen={setScreen} />;
-    if (screen === "profile") return <ProfileScreen userName={userName} userInitial={userInitial} upiId={upiId} user={user} profile={profile} setProfile={setProfile} transactions={transactions} profileSaved={profileSaved} handleSaveProfile={handleSaveProfile} handleLogout={handleLogout} goBack={goBack} setBankStep={setBankStep} setScreen={setScreen} linkedBanks={linkedBanks} />;
+    if (screen === "profile") return <ProfileScreen userName={userName} userInitial={userInitial} upiId={upiId} user={user} profile={profile} transactions={transactions} handleLogout={handleLogout} goBack={goBack} setBankStep={setBankStep} setScreen={setScreen} linkedBanks={linkedBanks} />;
     if (screen === "banks") return <BanksScreen bankStep={bankStep} setBankStep={setBankStep} selectedBank={selectedBank} setSelectedBank={setSelectedBank} bankOtp={bankOtp} setBankOtp={setBankOtp} linkedBanks={linkedBanks} setLinkedBanks={setLinkedBanks} user={user} cloudMode={cloudMode} setScreen={setScreen} />;
     return <HomeScreen userName={userName} userInitial={userInitial} balance={balance} balanceVisible={balanceVisible} setBalanceVisible={setBalanceVisible} transactions={transactions} contacts={contacts} setSelectedTx={setSelectedTx} navigate={navigate} setAddMoneyStep={setAddMoneyStep} setSendStep={setSendStep} />;
   };
