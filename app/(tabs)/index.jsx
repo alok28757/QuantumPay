@@ -1,112 +1,40 @@
 import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, setDoc, updateDoc, where } from 'firebase/firestore';
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { decryptTransaction, encryptTransaction, generatePQCKeys, getPQCPrivateKey, hashMpin, signTransaction, storePQCPrivateKey } from "../../lib/crypto";
 import { db, getSession, signInUser, signOutUser, signUpUser } from "../../lib/firebase";
+import { Session } from "../../lib/session";
+import { LocalDB } from "../../lib/localdb";
+import { checkFirebase, playSuccessSound } from "../../lib/utils";
 
-// ─── SESSION HELPER (per-tab) ────────────────────────────────────────────────
-const Session = {
-  get: () => sessionStorage.getItem("qp_current_phone"),
-  set: (p) => sessionStorage.setItem("qp_current_phone", p),
-  clear: () => sessionStorage.removeItem("qp_current_phone"),
-};
+// ── Auth Screens ─────────────────────────────────────────────────────────────
+import SplashScreen from "../../screens/auth/SplashScreen";
+import LoginScreen from "../../screens/auth/LoginScreen";
+import RegisterPhoneScreen from "../../screens/auth/RegisterPhoneScreen";
+import RegisterProfileScreen from "../../screens/auth/RegisterProfileScreen";
+import RegisterUpiScreen from "../../screens/auth/RegisterUpiScreen";
+import RegisterMpinScreen from "../../screens/auth/RegisterMpinScreen";
+import RegisterConfirmScreen from "../../screens/auth/RegisterConfirmScreen";
+import WelcomeScreen from "../../screens/auth/WelcomeScreen";
 
-// ─── LOCAL FALLBACK ──────────────────────────────────────────────────────────
-const LocalDB = {
-  getUsers: () => JSON.parse(localStorage.getItem("qp_users") || "{}"),
-  saveUsers: (u) => localStorage.setItem("qp_users", JSON.stringify(u)),
-};
+// ── App Screens ──────────────────────────────────────────────────────────────
+import HomeScreen from "../../screens/HomeScreen";
+import SendScreen from "../../screens/SendScreen";
+import AddMoneyScreen from "../../screens/AddMoneyScreen";
+import ScanScreen from "../../screens/ScanScreen";
+import HistoryScreen from "../../screens/HistoryScreen";
+import RequestScreen from "../../screens/RequestScreen";
+import BillsScreen from "../../screens/BillsScreen";
+import ProfileScreen from "../../screens/ProfileScreen";
+import BanksScreen from "../../screens/BanksScreen";
+import TransactionReceipt from "../../screens/TransactionReceipt";
 
-// Quick connectivity check (3s timeout)
-const FIREBASE_API_KEY = process.env.EXPO_PUBLIC_FIREBASE_API_KEY || '';
-const FIREBASE_PROJECT_ID = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || '';
-
-const checkFirebase = async () => {
-  if (!FIREBASE_API_KEY || !FIREBASE_PROJECT_ID) return false;
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    // Simple ping to Firestore REST API to check connectivity
-    const res = await fetch(
-      `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/profiles?pageSize=1`,
-      { signal: controller.signal }
-    );
-    clearTimeout(timeout);
-    return res.ok;
-  } catch { return false; }
-};
-
-const AVATAR_COLORS = ["#8b5cf6", "#06b6d4", "#f43f5e", "#10b981", "#f97316", "#eab308", "#ec4899", "#3b82f6"];
-const AVATARS = ["👤", "👩", "👨", "🧑", "👩‍💻", "👨‍💻", "🧑‍💼", "👩‍🎓"];
-
-const BILLS = [
-  { id: 1, icon: "⚡", name: "Electricity", color: "#f7c948" },
-  { id: 2, icon: "📱", name: "Mobile", color: "#4ade80" },
-  { id: 3, icon: "💧", name: "Water", color: "#38bdf8" },
-  { id: 4, icon: "📺", name: "DTH", color: "#a78bfa" },
-  { id: 5, icon: "🌐", name: "Internet", color: "#fb923c" },
-  { id: 6, icon: "🏦", name: "Loan EMI", color: "#f43f5e" },
-];
-
-const playSuccessSound = () => {
-  try {
-    const audio = new Audio("https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3");
-    audio.volume = 0.5;
-    audio.play().catch(() => { });
-  } catch (e) { }
-};
-
-const S = {
-  backBtn: { width: 36, height: 36, borderRadius: 18, background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, color: "#fff", flexShrink: 0 },
-  card: { background: "rgba(255,255,255,0.04)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.08)" },
-  gradBtn: (disabled) => ({ background: disabled ? "rgba(255,255,255,0.08)" : "linear-gradient(135deg, #8b5cf6, #06b6d4)", borderRadius: 18, padding: "16px", textAlign: "center", fontSize: 16, fontWeight: 900, color: disabled ? "rgba(255,255,255,0.3)" : "#fff", cursor: disabled ? "default" : "pointer", transition: "all 0.2s" }),
-  label: { fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 700, letterSpacing: 0.8, marginBottom: 6 },
-  input: { width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "14px 16px", color: "#fff", fontSize: 15, outline: "none", boxSizing: "border-box" },
-};
-
-function PhoneFrame({ children, bg }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#050510", padding: 20, fontFamily: "'Segoe UI', sans-serif" }}>
-      <style>{`
-        @keyframes pulseCheck {
-          0% { transform: scale(0.8); opacity: 0; box-shadow: 0 0 0 rgba(16,185,129,0); }
-          70% { transform: scale(1.15); opacity: 1; box-shadow: 0 0 60px rgba(16,185,129,0.6); }
-          100% { transform: scale(1); opacity: 1; box-shadow: 0 0 40px rgba(16,185,129,0.4); }
-        }
-      `}</style>
-      <div style={{ width: 390, height: 800, background: bg || "#0d0d1f", borderRadius: 44, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 40px 100px rgba(139,92,246,0.25), 0 0 0 1px rgba(255,255,255,0.08)" }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function PinPad({ value, onChange }) {
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "✓"];
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 14, justifyContent: "center", marginBottom: 28 }}>
-        {[0, 1, 2, 3].map(i => (
-          <div key={i} style={{ width: 52, height: 52, borderRadius: 26, background: i < value.length ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, color: "#fff", transition: "all 0.2s" }}>
-            {i < value.length ? "●" : ""}
-          </div>
-        ))}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-        {keys.map(k => (
-          <div key={k} onClick={() => {
-            if (k === "⌫") onChange(value.slice(0, -1));
-            else if (k === "✓") { if (value.length === 4) onChange(value, true); }
-            else if (value.length < 4) onChange(value + k);
-          }} style={{ height: 56, borderRadius: 16, background: k === "✓" ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: "#fff", cursor: "pointer", border: "1px solid rgba(255,255,255,0.06)", transition: "all 0.15s" }}>
-            {k}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// ── Shared Components ────────────────────────────────────────────────────────
+import PhoneFrame from "../../components/PhoneFrame";
 
 export default function QuantumPay() {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATE
+  // ═══════════════════════════════════════════════════════════════════════════
   const [authStep, setAuthStep] = useState("splash");
   const [loginPhone, setLoginPhone] = useState("");
   const [loginMpin, setLoginMpin] = useState("");
@@ -141,36 +69,14 @@ export default function QuantumPay() {
   const [cloudMode, setCloudMode] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [linkedBanks, setLinkedBanks] = useState([]);
-
-  // Bank Linking States
   const [bankStep, setBankStep] = useState(1);
   const [selectedBank, setSelectedBank] = useState(null);
   const [bankOtp, setBankOtp] = useState("");
   const [selectedTx, setSelectedTx] = useState(null);
 
-  // ScanScreen Hooks
-  const scannerRef = useRef(null);
-  const scannerInstanceRef = useRef(null);
-  const [scanError, setScanError] = useState("");
-  const [scanning, setScanning] = useState(false);
-
-  // Cleanup scanner on tab switch or unmount
-  useEffect(() => {
-    return () => {
-      if (scannerInstanceRef.current) {
-        scannerInstanceRef.current.stop().catch(() => { });
-        scannerInstanceRef.current = null;
-      }
-      setScanning(false);
-    };
-  }, [scanTab]);
-
-  // RequestScreen Hooks
-  const [reqStep, setReqStep] = useState(1);
-  const [reqAmount, setReqAmount] = useState("");
-  const [reqNote, setReqNote] = useState("");
-
-  // ─── DUAL-MODE DATA LAYER ────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DATA LAYER
+  // ═══════════════════════════════════════════════════════════════════════════
   const loadUserData = async (phone, isCloud) => {
     const cloud = isCloud !== undefined ? isCloud : cloudMode;
     if (cloud) {
@@ -183,15 +89,12 @@ export default function QuantumPay() {
         setUser({ phone, name: p.name, dob: p.dob, upiId: p.upi_id, createdAt: p.created_at });
         if (p.linked_banks) setLinkedBanks(p.linked_banks);
       }
-
       const txRef = collection(db, "transactions");
-      const q = query(txRef, orderBy("created_at", "desc"), limit(50)); // Filtering by phone locally as Firestore requires complex composite indices for OR queries
+      const q = query(txRef, orderBy("created_at", "desc"), limit(50));
       const querySnapshot = await getDocs(q);
-
       const txData = querySnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(tx => tx.sender_phone === phone || tx.receiver_phone === phone);
-
       if (txData.length > 0) {
         const decrypted = await Promise.all(txData.map(tx => tx.encrypted ? decryptTransaction(phone, tx) : Promise.resolve(tx)));
         setTransactions(decrypted.map(tx => ({
@@ -224,7 +127,6 @@ export default function QuantumPay() {
       const phone = Session.get();
       if (phone) {
         if (isCloud) {
-          // Check for existing Firebase Auth session (Firebase restores it automatically in the background)
           const session = await getSession();
           if (session) { await loadUserData(phone, true); setAuthStep("app"); }
         } else {
@@ -254,9 +156,15 @@ export default function QuantumPay() {
     init();
   }, []);
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NAVIGATION
+  // ═══════════════════════════════════════════════════════════════════════════
   const navigate = (to) => { setPrevScreen(screen); setScreen(to); };
   const goBack = () => setScreen(prevScreen);
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AUTH HANDLERS
+  // ═══════════════════════════════════════════════════════════════════════════
   const handleRegisterPhone = async () => {
     if (!/^\d{10}$/.test(regPhone)) { setRegError("Enter a valid 10-digit phone number"); return; }
     if (cloudMode) {
@@ -303,11 +211,9 @@ export default function QuantumPay() {
       const pqcKeys = generatePQCKeys();
       storePQCPrivateKey(regPhone, pqcKeys.privateKey);
       if (cloudMode) {
-        // 1. Create Firebase Auth account
         const { data: authData, error: authErr } = await signUpUser(regPhone, hashedPin);
         if (authErr) { setRegError("Registration failed: " + authErr.message); return; }
         const userId = authData?.user?.uid;
-        // 2. Insert profile with user_id link
         try {
           await setDoc(doc(db, "profiles", regPhone), { phone: regPhone, name: regName, dob: regDob, upi_id: regUpi, mpin: hashedPin, balance: 0, public_key: pqcKeys.publicKey, user_id: userId, created_at: new Date().toISOString() });
         } catch (error) { setRegError("Registration failed: " + error.message); return; }
@@ -329,16 +235,13 @@ export default function QuantumPay() {
       if (!/^\d{10}$/.test(loginPhone)) { setLoginError("Enter a valid 10-digit phone number"); setLoginMpin(""); return; }
       const hashedVal = await hashMpin(val);
       if (cloudMode) {
-        // Try Firebase Auth first
         const { error } = await signInUser(loginPhone, hashedVal);
         if (error) {
-          // Fallback: check MPIN directly in profiles (for pre-auth accounts)
           const docRef = doc(db, "profiles", loginPhone);
           const docSnap = await getDoc(docRef);
           if (!docSnap.exists()) { setLoginError("Phone not registered. Please sign up."); setLoginMpin(""); return; }
           const data = docSnap.data();
           if (data.mpin !== hashedVal) { setLoginError("Wrong MPIN. Please try again."); setLoginMpin(""); return; }
-          // Auto-migrate: create Firebase Auth account for old user
           const { data: authData } = await signUpUser(loginPhone, hashedVal);
           if (authData?.user?.uid) {
             await updateDoc(docRef, { user_id: authData.user.uid });
@@ -364,6 +267,9 @@ export default function QuantumPay() {
     setScreen("home"); setAuthStep("login");
   };
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // APP HANDLERS
+  // ═══════════════════════════════════════════════════════════════════════════
   const handleSaveProfile = async () => {
     const phone = Session.get();
     if (phone) {
@@ -386,9 +292,7 @@ export default function QuantumPay() {
         const senderRef = doc(db, "profiles", senderPhone);
         const senderDoc = await transaction.get(senderRef);
         if (!senderDoc.exists()) throw new Error("Sender not found");
-
         transaction.update(senderRef, { balance: senderDoc.data().balance - amt });
-
         const recipientQ = query(collection(db, "profiles"), where("upi_id", "==", recipientUpi), limit(1));
         const recipientSnap = await getDocs(recipientQ);
         if (!recipientSnap.empty) {
@@ -399,19 +303,14 @@ export default function QuantumPay() {
           }
         }
       });
-
       const recipientQSingle = query(collection(db, "profiles"), where("upi_id", "==", recipientUpi), limit(1));
       const recipientSnapSingle = await getDocs(recipientQSingle);
       const recipientPhone = !recipientSnapSingle.empty ? recipientSnapSingle.docs[0].data().phone : recipientUpi;
-
-      // Build, sign, and insert TWO copies (one per party, each encrypted with their own key)
       const rawTx = { sender_phone: senderPhone, sender_name: senderName, receiver_phone: recipientPhone, receiver_name: selectedContact.name, amount: amt, note: note || "Payment", created_at: new Date().toISOString() };
       const privKey = getPQCPrivateKey(senderPhone);
       const signature = privKey ? signTransaction(privKey, { sender: senderPhone, receiver: rawTx.receiver_phone, amount: amt, time: Date.now() }) : null;
-      // Sender's copy (encrypted with sender's key)
       const senderEncTx = await encryptTransaction(senderPhone, rawTx);
       await setDoc(doc(collection(db, "transactions")), { ...senderEncTx, signature, created_at: rawTx.created_at });
-      // Receiver's copy (encrypted with receiver's key)
       if (!recipientSnapSingle.empty) {
         const receiverEncTx = await encryptTransaction(recipientPhone, rawTx);
         await setDoc(doc(collection(db, "transactions")), { ...receiverEncTx, signature, created_at: rawTx.created_at });
@@ -448,997 +347,43 @@ export default function QuantumPay() {
     }
   };
 
-  const resetSend = () => { setSelectedContact(null); setAmount(""); setNote(""); setPin(""); setSendStep(1); setScreen("home"); };
-
-
-  const filteredTx = transactions.filter(t => activeTab === "all" ? true : t.type === activeTab);
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DERIVED VALUES
+  // ═══════════════════════════════════════════════════════════════════════════
   const userName = profile.name || user?.name || "User";
   const userInitial = userName.charAt(0).toUpperCase();
   const upiId = user?.upiId || (userName.toLowerCase().replace(/\s+/g, "").slice(0, 10) + "@qpay");
 
-  // ════════════════════════════
-  // AUTH SCREENS
-  // ════════════════════════════
-
-  if (authStep === "splash") return (
-    <PhoneFrame bg="linear-gradient(160deg,#1a0533 0%,#0d0d1f 100%)">
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: "10%", width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle, rgba(139,92,246,0.3) 0%, transparent 70%)" }} />
-        <div style={{ fontSize: 72, marginBottom: 12, filter: "drop-shadow(0 0 30px rgba(139,92,246,0.5))" }}>⚛</div>
-        <div style={{ fontSize: 30, fontWeight: 900, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 4 }}>QUANTUMPAY</div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", marginTop: 8, letterSpacing: 2 }}>FAST · SECURE · SIMPLE</div>
-        <div style={{ position: "absolute", bottom: 60, width: "80%" }}>
-          <div onClick={() => setAuthStep("login")} style={S.gradBtn(false)}>Get Started →</div>
-        </div>
-      </div>
-    </PhoneFrame>
-  );
-
-  if (authStep === "login") return (
-    <PhoneFrame>
-      <div style={{ flex: 1, padding: "50px 24px 30px", display: "flex", flexDirection: "column" }}>
-        <div style={{ marginBottom: 32 }}>
-          <div style={{ fontSize: 11, color: "#8b5cf6", fontWeight: 700, letterSpacing: 2, marginBottom: 10 }}>⚛ QUANTUMPAY</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: "#fff", lineHeight: 1.2 }}>Welcome Back 👋</div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", marginTop: 8 }}>Enter your phone number and MPIN</div>
-        </div>
-
-        <div style={{ ...S.card, padding: 20, marginBottom: 16 }}>
-          <div style={S.label}>PHONE NUMBER</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 10, padding: "14px 10px", color: "#8b5cf6", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>+91</div>
-            <input value={loginPhone} onChange={e => { setLoginPhone(e.target.value.replace(/\D/g, "").slice(0, 10)); setLoginError(""); }} placeholder="10-digit mobile number" type="tel" style={{ ...S.input }} />
-          </div>
-        </div>
-
-        {loginPhone.length === 10 && (
-          <div style={{ ...S.card, padding: 20, marginBottom: 16 }}>
-            <div style={S.label}>4-DIGIT MPIN</div>
-            <PinPad value={loginMpin} onChange={handleLoginMpin} />
-          </div>
-        )}
-
-        {loginError && <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f43f5e", marginBottom: 16 }}>⚠️ {loginError}</div>}
-
-        <div style={{ marginTop: "auto", textAlign: "center" }}>
-          <span style={{ fontSize: 13, color: "rgba(255,255,255,0.35)" }}>New to QuantumPay? </span>
-          <span onClick={() => { setRegPhone(""); setRegError(""); setAuthStep("register-phone"); }} style={{ fontSize: 13, color: "#8b5cf6", fontWeight: 700, cursor: "pointer" }}>Create Account →</span>
-        </div>
-      </div>
-    </PhoneFrame>
-  );
-
-  const StepBar = ({ step }) => (
-    <div style={{ display: "flex", gap: 5, marginBottom: 22 }}>
-      {[1, 2, 3, 4].map(s => <div key={s} style={{ height: 4, flex: 1, borderRadius: 2, background: s <= step ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.1)", transition: "all 0.3s" }} />)}
-    </div>
-  );
-
-  if (authStep === "register-phone") return (
-    <PhoneFrame>
-      <div style={{ flex: 1, padding: "40px 24px 30px", display: "flex", flexDirection: "column" }}>
-        <div onClick={() => setAuthStep("login")} style={{ ...S.backBtn, marginBottom: 24 }}>←</div>
-        <StepBar step={1} />
-        <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 6 }}>Your phone number 📱</div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 24 }}>This will be your login identifier</div>
-        <div style={{ ...S.card, padding: 20, marginBottom: 16 }}>
-          <div style={S.label}>MOBILE NUMBER</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 10, padding: "14px 10px", color: "#8b5cf6", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>+91</div>
-            <input value={regPhone} onChange={e => { setRegPhone(e.target.value.replace(/\D/g, "").slice(0, 10)); setRegError(""); }} placeholder="10-digit mobile number" type="tel" style={{ ...S.input }} />
-          </div>
-        </div>
-        {regError && <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f43f5e", marginBottom: 16 }}>⚠️ {regError}</div>}
-        <div onClick={handleRegisterPhone} style={S.gradBtn(regPhone.length !== 10)}>Continue →</div>
-      </div>
-    </PhoneFrame>
-  );
-
-  if (authStep === "register-profile") return (
-    <PhoneFrame>
-      <div style={{ flex: 1, padding: "40px 24px 30px", display: "flex", flexDirection: "column" }}>
-        <div onClick={() => setAuthStep("register-phone")} style={{ ...S.backBtn, marginBottom: 24 }}>←</div>
-        <StepBar step={2} />
-        <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 6 }}>Tell us about you 👤</div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 24 }}>Used for your profile and UPI ID</div>
-        <div style={{ ...S.card, padding: 20, marginBottom: 16 }}>
-          <div style={S.label}>FULL NAME</div>
-          <input value={regName} onChange={e => { setRegName(e.target.value); setRegError(""); }} placeholder="e.g. Alok Sharma" style={{ ...S.input, marginBottom: 16 }} />
-          <div style={S.label}>DATE OF BIRTH</div>
-          <input value={regDob} onChange={e => setRegDob(e.target.value)} type="date" max={new Date().toISOString().split("T")[0]} style={{ ...S.input, colorScheme: "dark" }} />
-        </div>
-        {regError && <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f43f5e", marginBottom: 16 }}>⚠️ {regError}</div>}
-        <div onClick={handleRegisterProfile} style={S.gradBtn(!regName.trim() || !regDob)}>Continue →</div>
-      </div>
-    </PhoneFrame>
-  );
-
-  if (authStep === "register-upi") return (
-    <PhoneFrame>
-      <div style={{ flex: 1, padding: "40px 24px 30px", display: "flex", flexDirection: "column" }}>
-        <div onClick={() => setAuthStep("register-profile")} style={{ ...S.backBtn, marginBottom: 24 }}>←</div>
-        <StepBar step={3} />
-        <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 6 }}>Your UPI ID ⚡</div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 24 }}>This is how others can send you money</div>
-        <div style={{ ...S.card, padding: 20, marginBottom: 14 }}>
-          <div style={S.label}>UPI ID</div>
-          <input value={regUpi} onChange={e => { setRegUpi(e.target.value.toLowerCase().replace(/\s/g, "")); setRegError(""); }} placeholder="yourname@qpay" style={{ ...S.input, marginBottom: 10 }} />
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>Must end with @qpay</div>
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-          {[regName.toLowerCase().replace(/\s+/g, "").slice(0, 8), regName.toLowerCase().split(" ")[0], regPhone.slice(-4) + "pay"].filter(Boolean).map(s => (
-            <div key={s} onClick={() => setRegUpi(s + "@qpay")} style={{ background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 20, padding: "6px 14px", fontSize: 12, color: "#a78bfa", cursor: "pointer" }}>{s}@qpay</div>
-          ))}
-        </div>
-        {regError && <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f43f5e", marginBottom: 16 }}>⚠️ {regError}</div>}
-        <div onClick={handleRegisterUpi} style={S.gradBtn(!regUpi.includes("@"))}>Continue →</div>
-      </div>
-    </PhoneFrame>
-  );
-
-  if (authStep === "register-mpin") return (
-    <PhoneFrame>
-      <div style={{ flex: 1, padding: "40px 24px 30px", display: "flex", flexDirection: "column" }}>
-        <div onClick={() => setAuthStep("register-upi")} style={{ ...S.backBtn, marginBottom: 24 }}>←</div>
-        <StepBar step={4} />
-        <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 6 }}>Set your MPIN 🔐</div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 28 }}>4-digit PIN to secure your account. Don't share with anyone.</div>
-        <PinPad value={regMpin} onChange={handleSetMpin} />
-        {regError && <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f43f5e", marginTop: 16, textAlign: "center" }}>⚠️ {regError}</div>}
-      </div>
-    </PhoneFrame>
-  );
-
-  if (authStep === "register-confirm") return (
-    <PhoneFrame>
-      <div style={{ flex: 1, padding: "40px 24px 30px", display: "flex", flexDirection: "column" }}>
-        <div onClick={() => { setRegMpin(""); setRegMpinConfirm(""); setAuthStep("register-mpin"); }} style={{ ...S.backBtn, marginBottom: 24 }}>←</div>
-        <StepBar step={4} />
-        <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 6 }}>Confirm MPIN 🔐</div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 28 }}>Re-enter your 4-digit MPIN to confirm</div>
-        <PinPad value={regMpinConfirm} onChange={handleConfirmMpin} />
-        {regError && <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f43f5e", marginTop: 16, textAlign: "center" }}>⚠️ {regError}</div>}
-      </div>
-    </PhoneFrame>
-  );
-
-  if (authStep === "welcome") return (
-    <PhoneFrame>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
-        <div style={{ width: 96, height: 96, borderRadius: 48, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 48, boxShadow: "0 0 40px rgba(16,185,129,0.4)" }}>✓</div>
-        <div style={{ fontSize: 26, fontWeight: 900, color: "#fff" }}>You're In! 🎉</div>
-        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.35)" }}>Welcome to QuantumPay</div>
-        <div style={{ fontSize: 13, color: "#8b5cf6", fontWeight: 700 }}>{upiId}</div>
-      </div>
-    </PhoneFrame>
-  );
-
-  const TxRow = ({ tx }) => (
-    <div onClick={() => setSelectedTx(tx)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}>
-      <div style={{ width: 44, height: 44, borderRadius: 22, background: tx.type === "received" ? "rgba(74,222,128,0.12)" : "rgba(244,63,94,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-        {contacts.find(c => c.name === tx.name)?.avatar || (tx.type === "received" ? "💰" : "🏢")}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.name}</div>
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>{tx.note} · {tx.time}</div>
-      </div>
-      <div style={{ textAlign: "right", flexShrink: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: tx.type === "received" ? "#4ade80" : "#f43f5e" }}>{tx.type === "received" ? "+" : "−"}₹{tx.amount.toLocaleString("en-IN")}</div>
-        <div style={{ fontSize: 10, color: "#4ade80" }}>✓ success</div>
-      </div>
-    </div>
-  );
-
-  // ══════════════════════════
-  // MAIN APP
-  // ══════════════════════════
-
-  const HomeScreen = () => (
-    <div style={{ paddingBottom: 20 }}>
-      <div style={{ background: "linear-gradient(160deg,#1a0533 0%,#0d0d1f 65%)", padding: "18px 20px 30px", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: -60, right: -60, width: 220, height: 220, borderRadius: "50%", background: "radial-gradient(circle,rgba(139,92,246,0.2) 0%,transparent 70%)" }} />
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 1 }}>WELCOME BACK</div>
-            <div style={{ fontSize: 20, fontWeight: 900, color: "#fff" }}>{userName}</div>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <div style={{ width: 38, height: 38, borderRadius: 19, background: "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer" }}>🔔</div>
-            <div onClick={() => navigate("profile")} style={{ width: 38, height: 38, borderRadius: 19, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 900, color: "#fff", cursor: "pointer", letterSpacing: 0 }} title="Profile">{userInitial}</div>
-          </div>
-        </div>
-
-        <div style={{ ...S.card, padding: "18px 22px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 1, marginBottom: 4 }}>TOTAL BALANCE</div>
-              <div style={{ fontSize: 30, fontWeight: 900, color: "#fff", letterSpacing: -1 }}>
-                {balanceVisible ? `₹${balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })} ` : "₹ ••••••"}
-              </div>
-            </div>
-            <div onClick={() => setBalanceVisible(v => !v)} style={{ fontSize: 20, cursor: "pointer", marginTop: 4 }}>{balanceVisible ? "👁" : "🙈"}</div>
-          </div>
-          <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
-            <div style={{ flex: 1, background: "rgba(74,222,128,0.1)", borderRadius: 10, padding: "10px 12px" }}>
-              <div style={{ fontSize: 9, color: "#4ade80", fontWeight: 700 }}>↓ RECEIVED</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginTop: 2 }}>₹{transactions.filter(t => t.type === "received").reduce((s, t) => s + t.amount, 0).toLocaleString("en-IN")}</div>
-            </div>
-            <div style={{ flex: 1, background: "rgba(244,63,94,0.1)", borderRadius: 10, padding: "10px 12px" }}>
-              <div style={{ fontSize: 9, color: "#f43f5e", fontWeight: 700 }}>↑ SENT</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginTop: 2 }}>₹{transactions.filter(t => t.type === "sent").reduce((s, t) => s + t.amount, 0).toLocaleString("en-IN")}</div>
-            </div>
-            <div onClick={() => { setAddMoneyStep(1); navigate("addmoney"); }} style={{ flex: 1, background: "rgba(139,92,246,0.15)", borderRadius: 10, padding: "10px 12px", cursor: "pointer", border: "1px solid rgba(139,92,246,0.3)" }}>
-              <div style={{ fontSize: 9, color: "#a78bfa", fontWeight: 700 }}>+ ADD</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginTop: 2 }}>Money</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ padding: "18px 20px 4px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
-          {[
-            { icon: "↑", label: "Send", color: "#8b5cf6", bg: "rgba(139,92,246,0.4)", action: () => { setSendStep(1); navigate("send"); } },
-            { icon: "↓", label: "Request", color: "#06b6d4", bg: "rgba(6,182,212,0.4)", action: () => navigate("request") },
-            { icon: "⊡", label: "Scan", color: "#10b981", bg: "rgba(16,185,129,0.4)", action: () => navigate("scan") },
-            { icon: "+", label: "Add Money", color: "#a78bfa", bg: "rgba(167,139,250,0.4)", action: () => { setAddMoneyStep(1); navigate("addmoney"); } },
-          ].map(item => (
-            <div key={item.label} onClick={item.action} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, cursor: "pointer" }}>
-              <div style={{ width: 54, height: 54, borderRadius: 17, background: item.bg, border: `1.5px solid ${item.color}80`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, color: item.color, fontWeight: 900, boxShadow: `0 0 12px ${item.color}20` }}>{item.icon}</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", fontWeight: 700, textAlign: "center" }}>{item.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ padding: "18px 20px 4px" }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", marginBottom: 12 }}>Pay Bills</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 8 }}>
-          {BILLS.map(b => (
-            <div key={b.id} onClick={() => navigate("bills")} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, cursor: "pointer" }}>
-              <div style={{ width: 42, height: 42, borderRadius: 13, background: `${b.color}18`, border: `1px solid ${b.color}28`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{b.icon}</div>
-              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", textAlign: "center", fontWeight: 600 }}>{b.name}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ padding: "18px 20px 0" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>Recent</div>
-          <div onClick={() => navigate("history")} style={{ fontSize: 12, color: "#8b5cf6", fontWeight: 700, cursor: "pointer" }}>See All →</div>
-        </div>
-        {transactions.slice(0, 4).map(tx => <TxRow key={tx.id} tx={tx} />)}
-      </div>
-    </div>
-  );
-
-  const SendScreen = () => (
-    <div style={{ padding: "16px 20px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-        <div onClick={() => sendStep > 1 ? setSendStep(s => s - 1) : goBack()} style={S.backBtn}>←</div>
-        <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Send Money</div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 5 }}>
-          {[1, 2, 3].map(s => <div key={s} style={{ width: s <= sendStep ? 20 : 8, height: 6, borderRadius: 3, background: s <= sendStep ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.12)", transition: "all 0.3s" }} />)}
-        </div>
-      </div>
-      {sendStep === 1 && <>
-        <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 14, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <span>🔍</span>
-          <input value={upiSearch} onChange={e => setUpiSearch(e.target.value)} placeholder="Search name or enter UPI ID..." style={{ background: "none", border: "none", outline: "none", color: "#fff", fontSize: 14, flex: 1 }} />
-          {upiSearch && <span onClick={() => setUpiSearch("")} style={{ color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 18 }}>✕</span>}
-        </div>
-        {upiSearch && upiSearch.includes("@") && (
-          <div onClick={() => { setSelectedContact({ name: upiSearch, upi: upiSearch, avatar: "👤", color: "#8b5cf6" }); setSendStep(2); setUpiSearch(""); }} style={{ ...S.card, padding: "14px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", border: "1px solid rgba(139,92,246,0.4)" }}>
-            <div style={{ width: 40, height: 40, borderRadius: 20, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>👤</div>
-            <div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>Send to UPI ID</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>{upiSearch}</div>
-            </div>
-            <div style={{ marginLeft: "auto", color: "#8b5cf6", fontSize: 20 }}>›</div>
-          </div>
-        )}
-        <div style={S.label}>CONTACTS</div>
-        {contacts.length === 0 && !upiSearch ? (
-          <div style={{ padding: "40px 20px", textAlign: "center" }}>
-            <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.5 }}>📱</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 8 }}>Search to Pay</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.5 }}>Find anyone on QuantumPay by searching their name or UPI ID above.</div>
-          </div>
-        ) : contacts.filter(c => !upiSearch || c.name.toLowerCase().includes(upiSearch.toLowerCase()) || c.upi.includes(upiSearch.toLowerCase())).length === 0 ? (
-          <div style={{ padding: "30px 20px", textAlign: "center", fontSize: 13, color: "rgba(255,255,255,0.4)" }}>No contacts found matching "{upiSearch}"</div>
-        ) : (
-          contacts.filter(c => !upiSearch || c.name.toLowerCase().includes(upiSearch.toLowerCase()) || c.upi.includes(upiSearch.toLowerCase())).map(c => (
-            <div key={c.id} onClick={() => { setSelectedContact(c); setSendStep(2); setUpiSearch(""); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}>
-              <div style={{ width: 46, height: 46, borderRadius: 23, background: `${c.color}20`, border: `1px solid ${c.color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{c.avatar}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{c.name}</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>{c.upi}</div>
-              </div>
-              <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 20 }}>›</div>
-            </div>
-          ))
-        )}
-      </>}
-      {sendStep === 2 && selectedContact && <>
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ width: 70, height: 70, borderRadius: 35, background: `${selectedContact.color}20`, border: `2px solid ${selectedContact.color}50`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34, margin: "0 auto 10px" }}>{selectedContact.avatar}</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>{selectedContact.name}</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>{selectedContact.upi}</div>
-        </div>
-        <div style={{ ...S.card, padding: "22px", textAlign: "center", marginBottom: 14 }}>
-          <div style={S.label}>ENTER AMOUNT</div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginTop: 8 }}>
-            <span style={{ fontSize: 30, fontWeight: 900, color: "rgba(255,255,255,0.3)" }}>₹</span>
-            <input value={amount} onChange={e => setAmount(e.target.value.replace(/\D/g, ""))} type="number" placeholder="0"
-              style={{ background: "none", border: "none", outline: "none", color: "#fff", fontSize: 44, fontWeight: 900, width: 160, textAlign: "center" }} />
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-          {[100, 200, 500, 1000].map(q => (
-            <div key={q} onClick={() => setAmount(String(q))} style={{ flex: 1, background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 10, padding: "8px 0", textAlign: "center", fontSize: 13, fontWeight: 700, color: "#8b5cf6", cursor: "pointer" }}>₹{q}</div>
-          ))}
-        </div>
-        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Add a note (optional)" style={{ ...S.input, marginBottom: 18 }} />
-        {linkedBanks.length === 0 ? (
-          <div onClick={() => { setBankStep(1); setScreen("banks"); }} style={S.gradBtn(false)}>Link Bank Account to Send</div>
-        ) : (
-          <>
-            <div style={{ ...S.card, padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(16,185,129,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🏦</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>Paying from</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{linkedBanks[0].bankName} • {linkedBanks[0].accountNumber}</div>
-              </div>
-            </div>
-            <div onClick={() => amount && setSendStep(3)} style={S.gradBtn(!amount)}>Continue →</div>
-          </>
-        )}
-      </>}
-      {sendStep === 3 && selectedContact && <>
-        <div style={{ ...S.card, padding: 20, marginBottom: 18 }}>
-          <div style={S.label}>CONFIRM PAYMENT</div>
-          {[["To", selectedContact.name], ["UPI ID", selectedContact.upi], ["Amount", `₹${Number(amount).toLocaleString("en-IN")} `], ["Note", note || "—"]].map(([k, v]) => (
-            <div key={k} style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
-              <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 13 }}>{k}</span>
-              <span style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>{v}</span>
-            </div>
-          ))}
-        </div>
-        <div style={S.label}>ENTER UPI PIN</div>
-        <div style={{ display: "flex", gap: 12, justifyContent: "center", margin: "12px 0 16px" }}>
-          {[0, 1, 2, 3].map(i => (
-            <div key={i} style={{ width: 44, height: 44, borderRadius: 22, background: i < pin.length ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#fff" }}>
-              {i < pin.length ? "●" : ""}
-            </div>
-          ))}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "✓"].map(k => (
-            <div key={k} onClick={() => {
-              if (k === "⌫") setPin(p => p.slice(0, -1));
-              else if (k === "✓") { if (pin.length === 4) handleSend(); }
-              else if (pin.length < 4) setPin(p => p + k);
-            }} style={{ height: 52, borderRadius: 14, background: k === "✓" ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "#fff", cursor: "pointer", border: "1px solid rgba(255,255,255,0.06)" }}>{k}</div>
-          ))}
-        </div>
-      </>}
-      {sendStep === 4 && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 50 }}>
-          <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, marginBottom: 22, boxShadow: "0 0 40px rgba(16,185,129,0.3)", animation: "pulseCheck 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both" }}>✓</div>
-          <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 8 }}>Payment Sent!</div>
-          <div style={{ fontSize: 34, fontWeight: 900, color: "#4ade80", marginBottom: 8 }}>₹{Number(amount).toLocaleString("en-IN")}</div>
-          <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 30 }}>to {selectedContact?.name}</div>
-          <div style={{ ...S.card, padding: "14px 28px", marginBottom: 24, textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>Transaction ID</div>
-            <div style={{ fontSize: 13, color: "#8b5cf6", fontWeight: 700 }}>QP{Date.now().toString().slice(-10)}</div>
-          </div>
-          <div onClick={resetSend} style={S.gradBtn(false)}>Back to Home</div>
-        </div>
-      )}
-    </div>
-  );
-
-  const AddMoneyScreen = () => (
-    <div style={{ padding: "16px 20px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-        <div onClick={() => addMoneyStep > 1 ? setAddMoneyStep(s => s - 1) : goBack()} style={S.backBtn}>←</div>
-        <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Add Money</div>
-      </div>
-      {addMoneyStep === 1 && <>
-        <div style={{ ...S.card, padding: 24, textAlign: "center", marginBottom: 18 }}>
-          <div style={S.label}>ENTER AMOUNT</div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginTop: 8 }}>
-            <span style={{ fontSize: 30, fontWeight: 900, color: "rgba(255,255,255,0.3)" }}>₹</span>
-            <input value={addAmount} onChange={e => setAddAmount(e.target.value.replace(/\D/g, ""))} type="number" placeholder="0"
-              style={{ background: "none", border: "none", outline: "none", color: "#fff", fontSize: 44, fontWeight: 900, width: 160, textAlign: "center" }} />
-          </div>
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-          {[500, 1000, 2000, 5000, 10000].map(q => (
-            <div key={q} onClick={() => setAddAmount(String(q))} style={{ background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 12, padding: "8px 16px", fontSize: 13, fontWeight: 700, color: "#8b5cf6", cursor: "pointer" }}>₹{q.toLocaleString("en-IN")}</div>
-          ))}
-        </div>
-        {addAmount && <div style={{ ...S.card, padding: 14, marginBottom: 18 }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>After Adding</span>
-            <span style={{ color: "#4ade80", fontWeight: 800 }}>₹{(balance + Number(addAmount)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-          </div>
-        </div>}
-        <div onClick={() => addAmount && setAddMoneyStep(2)} style={S.gradBtn(!addAmount)}>Choose Payment Method →</div>
-      </>}
-      {addMoneyStep === 2 && <>
-        <div style={{ ...S.card, padding: 14, marginBottom: 18 }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Adding</span>
-            <span style={{ color: "#4ade80", fontWeight: 900, fontSize: 16 }}>₹{Number(addAmount).toLocaleString("en-IN")}</span>
-          </div>
-        </div>
-        <div style={S.label}>SELECT PAYMENT METHOD</div>
-        {linkedBanks.length > 0 && (
-          <div onClick={() => { setAddMoneyStep(3); handleAddMoney(); }} style={{ ...S.card, padding: 16, marginTop: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 14, cursor: "pointer", border: "1px solid rgba(16,185,129,0.4)" }}>
-            <div style={{ width: 46, height: 46, borderRadius: 14, background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🏦</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{linkedBanks[0].bankName}</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>{linkedBanks[0].type} • {linkedBanks[0].accountNumber}</div>
-            </div>
-            <div style={{ color: "#10b981", fontSize: 12, fontWeight: 700 }}>Primary</div>
-          </div>
-        )}
-        {[
-          { icon: "🏦", label: "Net Banking", sub: "HDFC, ICICI, SBI & more", color: "#06b6d4" },
-          { icon: "💳", label: "Debit / Credit Card", sub: "Visa, Mastercard, RuPay", color: "#8b5cf6" },
-          { icon: "📱", label: "UPI Transfer", sub: "Pay via any UPI app", color: "#10b981" },
-        ].map(m => (
-          <div key={m.label} onClick={handleAddMoney} style={{ ...S.card, padding: 16, marginTop: 12, display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
-            <div style={{ width: 46, height: 46, borderRadius: 14, background: `${m.color}18`, border: `1px solid ${m.color}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{m.icon}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{m.label}</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>{m.sub}</div>
-            </div>
-            <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 20 }}>›</div>
-          </div>
-        ))}
-      </>}
-      {addMoneyStep === 3 && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 50 }}>
-          <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, marginBottom: 22, boxShadow: "0 0 40px rgba(16,185,129,0.3)", animation: "pulseCheck 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both" }}>✓</div>
-          <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 8 }}>Money Added!</div>
-          <div style={{ fontSize: 34, fontWeight: 900, color: "#4ade80", marginBottom: 32 }}>₹{Number(addAmount).toLocaleString("en-IN")}</div>
-          <div onClick={() => { setAddAmount(""); setAddMoneyStep(1); setScreen("home"); }} style={S.gradBtn(false)}>Back to Home</div>
-        </div>
-      )}
-    </div>
-  );
-
-  const ScanScreen = () => {
-    const qrData = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(userName)}&cu=INR`;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}&bgcolor=0d0d1f&color=8b5cf6&qzone=2`;
-
-    const startScanner = async () => {
-      setScanError("");
-      setScanning(true);
-      try {
-        const { Html5Qrcode } = await import("html5-qrcode");
-        const scanner = new Html5Qrcode("qr-reader");
-        scannerInstanceRef.current = scanner;
-        await scanner.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 220, height: 220 } },
-          (decodedText) => {
-            // Parse UPI QR: upi://pay?pa=xxx@qpay&pn=Name
-            let upi = decodedText;
-            if (decodedText.startsWith("upi://")) {
-              const params = new URLSearchParams(decodedText.split("?")[1] || "");
-              upi = params.get("pa") || decodedText;
-            }
-            scanner.stop().catch(() => { });
-            scannerInstanceRef.current = null;
-            setScanning(false);
-            setPayUpi(upi);
-            // Auto-navigate to send screen
-            setSelectedContact({ name: upi, upi: upi, avatar: "👤", color: "#8b5cf6" });
-            setSendStep(2);
-            navigate("send");
-          },
-          () => { } // ignore scan failures
-        );
-      } catch (err) {
-        setScanning(false);
-        setScanError(err?.message?.includes("NotAllowed") ? "Camera access denied. Please allow camera permission." : "Camera not available on this device.");
-      }
-    };
-
-    const stopScanner = () => {
-      if (scannerInstanceRef.current) {
-        scannerInstanceRef.current.stop().catch(() => { });
-        scannerInstanceRef.current = null;
-      }
-      setScanning(false);
-    };
-
-    return (
-      <div style={{ padding: "16px 20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-          <div onClick={goBack} style={S.backBtn}>←</div>
-          <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Scan & Pay</div>
-        </div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-          {[["my-qr", "My QR Code"], ["scan-qr", "Scan QR"]].map(([key, label]) => (
-            <div key={key} onClick={() => setScanTab(key)} style={{ flex: 1, padding: "10px", borderRadius: 12, textAlign: "center", fontSize: 13, fontWeight: 700, cursor: "pointer", background: scanTab === key ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.07)", color: scanTab === key ? "#fff" : "rgba(255,255,255,0.4)" }}>{label}</div>
-          ))}
-        </div>
-        {scanTab === "my-qr" && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-            <div style={{ ...S.card, padding: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 14, width: "100%", boxSizing: "border-box" }}>
-              <div style={{ width: 200, height: 200, borderRadius: 16, overflow: "hidden", border: "2px solid rgba(139,92,246,0.4)", background: "#0a0a18", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <img src={qrUrl} alt="QR Code" width="200" height="200" style={{ display: "block" }} />
-              </div>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 4 }}>{userName}</div>
-                <div style={{ fontSize: 13, color: "#8b5cf6", fontWeight: 700 }}>{upiId}</div>
-              </div>
-            </div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", textAlign: "center" }}>Share this QR code to receive payments instantly</div>
-          </div>
-        )}
-        {scanTab === "scan-qr" && (
-          <div>
-            {/* QR Scanner Area */}
-            <div style={{ ...S.card, padding: 20, marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#8b5cf6", letterSpacing: 0.5 }}>📷 SCAN QR CODE</div>
-              <div id="qr-reader" ref={scannerRef} style={{ width: 260, height: 260, borderRadius: 16, overflow: "hidden", background: "#000", border: "2px solid rgba(16,185,129,0.4)" }}>
-                {!scanning && (
-                  <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-                    <div style={{ fontSize: 48 }}>📸</div>
-                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", textAlign: "center", padding: "0 20px" }}>Tap button below to open camera</div>
-                  </div>
-                )}
-              </div>
-              {scanError && <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 12, padding: "10px 14px", fontSize: 12, color: "#f43f5e", width: "100%", boxSizing: "border-box" }}>⚠️ {scanError}</div>}
-              {!scanning ? (
-                <div onClick={startScanner} style={{ ...S.gradBtn(false), width: "100%", boxSizing: "border-box" }}>🔍 Start Scanner</div>
-              ) : (
-                <div onClick={stopScanner} style={{ background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 18, padding: "14px", textAlign: "center", fontSize: 14, fontWeight: 800, color: "#f43f5e", cursor: "pointer", width: "100%", boxSizing: "border-box" }}>⏹ Stop Scanner</div>
-              )}
-            </div>
-
-            {/* Manual UPI fallback */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-              <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.1)" }} />
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontWeight: 700 }}>OR</div>
-              <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.1)" }} />
-            </div>
-            <div style={{ ...S.card, padding: 18, marginBottom: 14 }}>
-              <div style={S.label}>ENTER UPI ID MANUALLY</div>
-              <input value={payUpi} onChange={e => setPayUpi(e.target.value.toLowerCase().replace(/\s/g, ""))} placeholder="e.g. alok@qpay" style={{ ...S.input }} />
-            </div>
-            <div onClick={() => { if (payUpi.includes("@")) { setSelectedContact({ name: payUpi, upi: payUpi, avatar: "👤", color: "#8b5cf6" }); setSendStep(2); navigate("send"); } }} style={S.gradBtn(!payUpi.includes("@"))}>Pay Now →</div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-
-  const HistoryScreen = () => (
-    <div style={{ padding: "16px 20px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-        <div onClick={goBack} style={S.backBtn}>←</div>
-        <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>History</div>
-      </div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-        {["all", "sent", "received"].map(tab => (
-          <div key={tab} onClick={() => setActiveTab(tab)} style={{ padding: "8px 18px", borderRadius: 20, fontSize: 13, fontWeight: 700, cursor: "pointer", textTransform: "capitalize", background: activeTab === tab ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.07)", color: activeTab === tab ? "#fff" : "rgba(255,255,255,0.4)" }}>{tab}</div>
-        ))}
-      </div>
-      {filteredTx.map(tx => <TxRow key={tx.id} tx={tx} />)}
-    </div>
-  );
-
-  const RequestScreen = () => {
-    let qrUrl = "";
-    if (reqStep === 2) {
-      const qrData = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(user?.name || profile?.name || "User")}&am=${reqAmount}&cu=INR&tn=${encodeURIComponent(reqNote)}`;
-      qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrData)}&bgcolor=151525&color=4ade80&qzone=2`;
-    }
-
-    return (
-      <div style={{ padding: "16px 20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-          <div onClick={() => {
-            if (reqStep === 2) setReqStep(1);
-            else { setReqAmount(""); setReqNote(""); goBack(); }
-          }} style={S.backBtn}>←</div>
-          <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Request Money</div>
-        </div>
-
-        {reqStep === 1 && (
-          <div style={{ paddingTop: 20 }}>
-            <div style={{ textAlign: "center", marginBottom: 30 }}>
-              <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 12 }}>How much are you requesting?</div>
-              <div style={{ display: "flex", justifyContent: "center", alignItems: "baseline", gap: 4 }}>
-                <span style={{ fontSize: 28, color: "rgba(255,255,255,0.3)", fontWeight: 800 }}>₹</span>
-                <input
-                  autoFocus
-                  type="number"
-                  placeholder="0"
-                  value={reqAmount}
-                  onChange={e => setReqAmount(e.target.value)}
-                  style={{ background: "transparent", border: "none", color: "#fff", fontSize: 56, fontWeight: 900, outline: "none", width: reqAmount.length > 0 ? `${reqAmount.length + 0.5}ch` : "2ch", textAlign: "center" }}
-                />
-              </div>
-            </div>
-
-            <div style={S.label}>WHAT'S IT FOR? (OPTIONAL)</div>
-            <input
-              value={reqNote}
-              onChange={e => setReqNote(e.target.value)}
-              placeholder="e.g. Dinner split"
-              style={{ ...S.input, marginBottom: 30 }}
-            />
-
-            <div onClick={() => Number(reqAmount) > 0 && setReqStep(2)} style={S.gradBtn(Number(reqAmount) <= 0)}>Generate QR Code</div>
-          </div>
-        )}
-
-        {reqStep === 2 && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 10 }}>
-            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>Requesting</div>
-            <div style={{ fontSize: 36, fontWeight: 900, color: "#4ade80", marginBottom: 8 }}>₹{Number(reqAmount).toLocaleString("en-IN")}</div>
-            {reqNote && <div style={{ fontSize: 14, color: "#fff", background: "rgba(255,255,255,0.1)", padding: "4px 12px", borderRadius: 12, marginBottom: 24 }}>"{reqNote}"</div>}
-
-            <div style={{ padding: 12, marginBottom: 24, background: "#151525", borderRadius: 16, display: "inline-block", border: "1px solid rgba(16,185,129,0.3)" }}>
-              <img src={qrUrl} alt="UPI QR" style={{ width: 220, height: 220, borderRadius: 8, display: "block" }} />
-            </div>
-
-            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", textAlign: "center", marginBottom: 30 }}>
-              Scan this QR code with any UPI app<br />to pay {user?.name || profile?.name || "User"}
-            </div>
-
-            <div style={{ display: "flex", gap: 12, width: "100%" }}>
-              <div onClick={() => alert("Mock: Request Link Copied!")} style={{ ...S.gradBtn(false), flex: 1, background: "rgba(255,255,255,0.08)", color: "#fff" }}>Copy Link</div>
-              <div onClick={() => alert("Mock: Share Intent Opened")} style={{ ...S.gradBtn(false), flex: 1 }}>Share QR</div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const BillsScreen = () => (
-    <div style={{ padding: "16px 20px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-        <div onClick={goBack} style={S.backBtn}>←</div>
-        <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Pay Bills</div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-        {BILLS.map(b => (
-          <div key={b.id} style={{ ...S.card, padding: "18px 10px", textAlign: "center", cursor: "pointer" }}>
-            <div style={{ fontSize: 34, marginBottom: 8 }}>{b.icon}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{b.name}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const ProfileScreen = () => {
-    const totalSent = transactions.filter(t => t.type === "sent").reduce((s, t) => s + t.amount, 0);
-    const totalReceived = transactions.filter(t => t.type === "received").reduce((s, t) => s + t.amount, 0);
-    const memberSince = user?.createdAt ? new Date(user.createdAt).toLocaleDateString("en-IN", { month: "short", year: "numeric" }) : "Today";
-    const SETTINGS = [
-      { icon: "🔔", label: "Notifications", sub: "Manage alerts & sounds" },
-      { icon: "🔒", label: "Privacy & Security", sub: "2FA, biometrics" },
-      { icon: "💳", label: "Linked Cards & Banks", sub: "Manage payment methods" },
-      { icon: "❓", label: "Help & Support", sub: "FAQs, chat with us" },
-      { icon: "📄", label: "Terms & Privacy", sub: "Legal information" },
-    ];
-    return (
-      <div style={{ padding: "16px 20px 30px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-          <div onClick={goBack} style={S.backBtn}>←</div>
-          <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>My Profile</div>
-        </div>
-
-        {/* Avatar + name + UPI */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 20 }}>
-          <div style={{ width: 80, height: 80, borderRadius: 40, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34, fontWeight: 900, color: "#fff", marginBottom: 12, boxShadow: "0 0 30px rgba(139,92,246,0.4)" }}>{userInitial}</div>
-          <div style={{ fontSize: 20, fontWeight: 900, color: "#fff", marginBottom: 4 }}>{userName}</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 6 }}>+91 {user?.phone || ""}</div>
-          <div style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.35)", borderRadius: 20, padding: "5px 14px", fontSize: 12, color: "#a78bfa", fontWeight: 700 }}>⚡ {upiId}</div>
-        </div>
-
-        {/* Stats row */}
-        <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-          {[
-            { label: "Total Sent", value: `₹${totalSent.toLocaleString("en-IN")}`, color: "#f43f5e", bg: "rgba(244,63,94,0.1)" },
-            { label: "Received", value: `₹${totalReceived.toLocaleString("en-IN")}`, color: "#4ade80", bg: "rgba(74,222,128,0.1)" },
-            { label: "Transactions", value: transactions.length, color: "#8b5cf6", bg: "rgba(139,92,246,0.1)" },
-          ].map(s => (
-            <div key={s.label} style={{ flex: 1, background: s.bg, border: `1px solid ${s.color}30`, borderRadius: 16, padding: "12px 8px", textAlign: "center" }}>
-              <div style={{ fontSize: 15, fontWeight: 900, color: s.color }}>{s.value}</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 3 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Info card: DOB + member since */}
-        <div style={{ ...S.card, padding: 16, marginBottom: 16 }}>
-          {[
-            { icon: "🎂", label: "Date of Birth", value: user?.dob ? new Date(user.dob + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "—" },
-            { icon: "📅", label: "Member Since", value: memberSince },
-            { icon: "📱", label: "Registered Phone", value: `+91 ${user?.phone || ""}` },
-          ].map((item, i, arr) => (
-            <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-              <span style={{ fontSize: 18 }}>{item.icon}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{item.label}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", marginTop: 2 }}>{item.value}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Edit display name */}
-        <div style={{ ...S.card, padding: 18, marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "#8b5cf6", marginBottom: 14, letterSpacing: 0.5 }}>EDIT DISPLAY NAME</div>
-          <div style={S.label}>FULL NAME</div>
-          <input value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))} placeholder={userName} style={{ ...S.input, marginBottom: 14 }} />
-          <div onClick={handleSaveProfile} style={{ ...S.gradBtn(false), fontSize: 14 }}>
-            {profileSaved ? "✓ Saved!" : "Save Changes"}
-          </div>
-        </div>
-
-        {/* Settings rows */}
-        <div style={{ ...S.card, marginBottom: 16, overflow: "hidden" }}>
-          {SETTINGS.map((item, i) => (
-            <div key={item.label} onClick={() => { if (item.label.includes("Linked Cards")) { setBankStep(1); setScreen("banks"); } }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", borderBottom: i < SETTINGS.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none", cursor: "pointer" }}>
-              <div style={{ width: 36, height: 36, borderRadius: 11, background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>{item.icon}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{item.label}</div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>{item.sub}</div>
-              </div>
-              <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 18 }}>›</div>
-            </div>
-          ))}
-        </div>
-
-        <div onClick={handleLogout} style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 18, padding: 16, textAlign: "center", fontSize: 15, fontWeight: 900, color: "#f43f5e", cursor: "pointer" }}>
-          🚪 &nbsp;Logout
-        </div>
-        <div style={{ textAlign: "center", marginTop: 20, fontSize: 11, color: "rgba(255,255,255,0.15)" }}>QuantumPay v1.0.0 · Member since {memberSince}</div>
-      </div>
-    );
-  };
-
-  const BanksScreen = () => {
-    const handleLinkBank = async () => {
-      const newBank = {
-        id: Date.now().toString(),
-        bankName: selectedBank.label,
-        accountNumber: "XX" + Math.floor(1000 + Math.random() * 9000),
-        type: "Savings"
-      };
-      const updated = [...linkedBanks, newBank];
-      setLinkedBanks(updated);
-
-      if (cloudMode && user?.phone) {
-        await updateDoc(doc(db, "profiles", user.phone), { linked_banks: updated });
-      } else if (user?.phone) {
-        const users = LocalDB.getUsers();
-        if (users[user.phone]) {
-          users[user.phone].linkedBanks = updated;
-          LocalDB.saveUsers(users);
-        }
-      }
-      setBankStep(5);
-    };
-
-    return (
-      <div style={{ padding: "16px 20px" }}>
-        {bankStep < 5 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-            <div onClick={() => {
-              if (bankStep === 1) setScreen("profile");
-              else if (bankStep === 4) setBankStep(2);
-              else setBankStep(s => s - 1);
-            }} style={S.backBtn}>←</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>
-              {bankStep === 1 ? "Linked Banks" : "Add Bank Account"}
-            </div>
-          </div>
-        )}
-
-        {bankStep === 1 && <>
-          {linkedBanks.length === 0 ? (
-            <div style={{ padding: "40px 20px", textAlign: "center" }}>
-              <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.5 }}>🏦</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 8 }}>No Banks Linked</div>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 24 }}>Link a bank account to make seamless UPI payments on QuantumPay.</div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
-              <div style={S.label}>YOUR LINKED ACCOUNTS</div>
-              {linkedBanks.map(b => (
-                <div key={b.id} style={{ ...S.card, padding: 16, display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🏦</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{b.bankName}</div>
-                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>{b.type} • {b.accountNumber}</div>
-                  </div>
-                  <div style={{ fontSize: 12, color: "#10b981", fontWeight: 700, background: "rgba(16,185,129,0.1)", padding: "4px 8px", borderRadius: 8 }}>Primary</div>
-                </div>
-              ))}
-            </div>
-          )}
-          <div onClick={() => setBankStep(2)} style={S.gradBtn(false)}>+ Add Bank Account</div>
-        </>}
-
-        {bankStep === 2 && <>
-          <div style={S.label}>SELECT YOUR BANK</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            {[
-              { id: "sbi", label: "State Bank of India", color: "#3b82f6" },
-              { id: "hdfc", label: "HDFC Bank", color: "#0ea5e9" },
-              { id: "icici", label: "ICICI Bank", color: "#f97316" },
-              { id: "axis", label: "Axis Bank", color: "#db2777" },
-              { id: "pnb", label: "Punjab National Bank", color: "#eab308" },
-              { id: "kotak", label: "Kotak Mahindra", color: "#ef4444" }
-            ].map(b => (
-              <div key={b.id} onClick={() => {
-                setSelectedBank(b);
-                setBankStep(3);
-                setTimeout(() => setBankStep(4), 2500);
-              }} style={{ ...S.card, padding: "16px 12px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, cursor: "pointer", border: "1px solid rgba(255,255,255,0.05)" }}>
-                <div style={{ width: 36, height: 36, borderRadius: 18, background: `${b.color}20`, color: b.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900 }}>{b.label[0]}</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{b.label}</div>
-              </div>
-            ))}
-          </div>
-        </>}
-
-        {bankStep === 3 && (
-          <div style={{ padding: "60px 20px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ width: 60, height: 60, borderRadius: 30, background: "rgba(139,92,246,0.1)", border: "2px dashed #8b5cf6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, marginBottom: 24, animation: "spin 2s linear infinite" }}>🏦</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 8 }}>Fetching Bank Accounts</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>Finding accounts linked to +91 {user?.phone} at {selectedBank?.label}...</div>
-          </div>
-        )}
-
-        {bankStep === 4 && <>
-          <div style={{ ...S.card, padding: 24, textAlign: "center", marginBottom: 18 }}>
-            <div style={{ width: 50, height: 50, borderRadius: 25, background: "rgba(16,185,129,0.15)", margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>✅</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", marginBottom: 6 }}>Account Found</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>{selectedBank?.label} • Savings Account</div>
-          </div>
-          <div style={S.label}>VERIFY WITH OTP</div>
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 16, lineHeight: 1.4 }}>A 6-digit OTP has been sent to your registered mobile number (+91 {user?.phone}) for verification.</p>
-          <input value={bankOtp} onChange={e => setBankOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} type="password" placeholder="• • • • • •" style={{ ...S.input, marginBottom: 24, textAlign: "center", fontSize: 24, letterSpacing: 8 }} />
-          <div onClick={() => bankOtp.length === 6 && handleLinkBank()} style={S.gradBtn(bankOtp.length < 6)}>Verify & Link Account</div>
-        </>}
-
-        {bankStep === 5 && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 50 }}>
-            <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, marginBottom: 22, boxShadow: "0 0 40px rgba(16,185,129,0.3)", animation: "pulseCheck 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both" }}>✓</div>
-            <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 8 }}>Bank Linked!</div>
-            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 32, textAlign: "center", padding: "0 20px" }}>You can now use your {selectedBank?.label} account for seamless UPI payments.</div>
-            <div onClick={() => { setBankStep(1); setBankOtp(""); }} style={S.gradBtn(false)}>View Linked Banks</div>
-          </div>
-        )}
-
-      </div>
-    );
-  };
-
-  const TransactionReceipt = () => {
-    const [showPqcDetails, setShowPqcDetails] = useState(false);
-    if (!selectedTx) return null;
-    const isRx = selectedTx.type === "received";
-    // Mock data for realism
-    const bankRef = "BRN" + Math.floor(100000000 + Math.random() * 900000000);
-    const txId = "QP" + (selectedTx.id?.toString() || Date.now().toString().slice(-8));
-
-    return (
-      <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", minHeight: "100%", boxSizing: "border-box", background: "#0a0a18", position: "relative" }}>
-
-        {/* Main Receipt UI */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 30, opacity: showPqcDetails ? 0 : 1, transition: "opacity 0.3s" }}>
-          <div onClick={() => setSelectedTx(null)} style={S.backBtn}>✕</div>
-          <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Receipt</div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 30, opacity: showPqcDetails ? 0 : 1, transition: "opacity 0.3s" }}>
-          <div style={{ width: 80, height: 80, borderRadius: 40, background: isRx ? "rgba(74,222,128,0.15)" : "rgba(244,63,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, marginBottom: 16 }}>
-            {isRx ? "↓" : "↑"}
-          </div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,0.6)", marginBottom: 8 }}>{isRx ? "Received from" : "Paid to"}</div>
-          <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 12 }}>{selectedTx.name}</div>
-          <div style={{ fontSize: 40, fontWeight: 900, color: isRx ? "#4ade80" : "#f43f5e", marginBottom: 4 }}>
-            {isRx ? "+" : "−"}₹{selectedTx.amount.toLocaleString("en-IN")}
-          </div>
-          <div style={{ fontSize: 14, color: isRx ? "#4ade80" : "#f43f5e", display: "flex", alignItems: "center", gap: 6, background: isRx ? "rgba(74,222,128,0.1)" : "rgba(244,63,94,0.1)", padding: "4px 12px", borderRadius: 12 }}>
-            <span style={{ fontWeight: 900 }}>✓</span> {isRx ? "Received Successfully" : "Paid Successfully"}
-          </div>
-        </div>
-
-        <div style={{ ...S.card, padding: 20, marginBottom: 20, opacity: showPqcDetails ? 0 : 1, transition: "opacity 0.3s" }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 16 }}>Transaction Details</div>
-          {[
-            { label: "Date & Time", value: selectedTx.time || new Date().toLocaleString("en-IN", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) },
-            { label: "Transaction ID", value: txId },
-            { label: "Bank Reference No.", value: bankRef },
-            { label: "Payment Method", value: linkedBanks.length > 0 ? `${linkedBanks[0].bankName} UPI` : "QuantumPay Wallet" }
-          ].map((row, i, arr) => (
-            <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>{row.label}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", textAlign: "right", maxWidth: "60%" }}>{row.value}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ flex: 1, opacity: showPqcDetails ? 0 : 1 }} />
-
-        <div style={{ opacity: showPqcDetails ? 0 : 1, transition: "opacity 0.3s" }}>
-          <div onClick={() => setShowPqcDetails(true)} style={{ textAlign: "center", padding: "14px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: 16, marginBottom: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-            <span style={{ fontSize: 16 }}>🔒</span>
-            <span style={{ fontSize: 14, fontWeight: 800, color: "#10b981", letterSpacing: 0.5 }}>QUANTUM VALIDATED</span>
-            <span style={{ color: "#10b981", fontSize: 16 }}>›</span>
-          </div>
-
-          <div onClick={() => alert("Mock: Receipt sharing opened")} style={{ ...S.gradBtn(false), background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.4)", color: "#a78bfa" }}>
-            📤 Share Receipt
-          </div>
-          <div style={{ textAlign: "center", marginTop: 24, paddingBottom: 20, fontSize: 12, color: "rgba(255,255,255,0.2)", fontWeight: 700, letterSpacing: 1 }}>POWERED BY QUANTUMPAY</div>
-        </div>
-
-        {/* PQC Overlay */}
-        {showPqcDetails && (
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "#050510", zIndex: 100, padding: 24, display: "flex", flexDirection: "column", overflowY: "auto", animation: "pulseCheck 0.3s ease-out" }}>
-            <div onClick={() => setShowPqcDetails(false)} style={{ ...S.backBtn, alignSelf: "flex-start", marginBottom: 24 }}>↓</div>
-
-            <div style={{ fontSize: 28, fontWeight: 900, color: "#10b981", marginBottom: 8, letterSpacing: -1 }}>Signature Valid</div>
-            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 32, lineHeight: 1.5 }}>This transaction was signed and verified using Post-Quantum Cryptography algorithms resilient to quantum computer attacks.</div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 32 }}>
-              <div style={{ ...S.card, padding: 16, background: "rgba(16,185,129,0.05)", borderLeft: "4px solid #10b981" }}>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>DIGITAL SIGNATURE ALGORITHM</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", fontFamily: "monospace" }}>Dilithium ML-DSA-65</div>
-              </div>
-              <div style={{ ...S.card, padding: 16, background: "rgba(139,92,246,0.05)", borderLeft: "4px solid #8b5cf6" }}>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>KEY ENCAPSULATION</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", fontFamily: "monospace" }}>Kyber-1024 / ML-KEM</div>
-              </div>
-            </div>
-
-            <div style={{ ...S.card, padding: 16, background: "#0a0a18", border: "1px solid rgba(255,255,255,0.05)" }}>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 700, letterSpacing: 1, marginBottom: 12, display: "flex", justifyContent: "space-between" }}>
-                <span>CRYPTOGRAPHIC PAYLOAD</span>
-                <span style={{ color: "#10b981" }}>VERIFIED</span>
-              </div>
-              <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8b5cf6", wordBreak: "break-all", lineHeight: 1.6, opacity: 0.8 }}>
-                {Array(6).fill(0).map(() => Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2)).join("")}...
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AUTH SCREEN ROUTING
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (authStep === "splash") return <SplashScreen onGetStarted={() => setAuthStep("login")} />;
+  if (authStep === "login") return <LoginScreen loginPhone={loginPhone} loginMpin={loginMpin} loginError={loginError} setLoginPhone={setLoginPhone} setLoginError={setLoginError} handleLoginMpin={handleLoginMpin} onRegister={() => { setRegPhone(""); setRegError(""); setAuthStep("register-phone"); }} />;
+  if (authStep === "register-phone") return <RegisterPhoneScreen regPhone={regPhone} regError={regError} setRegPhone={setRegPhone} setRegError={setRegError} handleRegisterPhone={handleRegisterPhone} onBack={() => setAuthStep("login")} />;
+  if (authStep === "register-profile") return <RegisterProfileScreen regName={regName} regDob={regDob} regError={regError} setRegName={setRegName} setRegDob={setRegDob} setRegError={setRegError} handleRegisterProfile={handleRegisterProfile} onBack={() => setAuthStep("register-phone")} />;
+  if (authStep === "register-upi") return <RegisterUpiScreen regUpi={regUpi} regPhone={regPhone} regName={regName} regError={regError} setRegUpi={setRegUpi} setRegError={setRegError} handleRegisterUpi={handleRegisterUpi} onBack={() => setAuthStep("register-profile")} />;
+  if (authStep === "register-mpin") return <RegisterMpinScreen regMpin={regMpin} regError={regError} handleSetMpin={handleSetMpin} onBack={() => setAuthStep("register-upi")} />;
+  if (authStep === "register-confirm") return <RegisterConfirmScreen regMpinConfirm={regMpinConfirm} regError={regError} handleConfirmMpin={handleConfirmMpin} onBack={() => { setRegMpin(""); setRegMpinConfirm(""); setAuthStep("register-mpin"); }} />;
+  if (authStep === "welcome") return <WelcomeScreen upiId={upiId} />;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // APP SCREEN ROUTING
+  // ═══════════════════════════════════════════════════════════════════════════
   const renderScreen = () => {
-    if (screen === "send") return SendScreen();
-    if (screen === "scan") return ScanScreen();
-    if (screen === "history") return HistoryScreen();
-    if (screen === "request") return RequestScreen();
-    if (screen === "bills") return BillsScreen();
-    if (screen === "addmoney") return AddMoneyScreen();
-    if (screen === "profile") return ProfileScreen();
-    if (screen === "banks") return BanksScreen();
-    return HomeScreen();
+    if (screen === "send") return <SendScreen sendStep={sendStep} setSendStep={setSendStep} selectedContact={selectedContact} setSelectedContact={setSelectedContact} amount={amount} setAmount={setAmount} note={note} setNote={setNote} pin={pin} setPin={setPin} upiSearch={upiSearch} setUpiSearch={setUpiSearch} contacts={contacts} linkedBanks={linkedBanks} goBack={goBack} handleSend={handleSend} setBankStep={setBankStep} setScreen={setScreen} />;
+    if (screen === "scan") return <ScanScreen upiId={upiId} userName={userName} scanTab={scanTab} setScanTab={setScanTab} payUpi={payUpi} setPayUpi={setPayUpi} goBack={goBack} navigate={navigate} setSelectedContact={setSelectedContact} setSendStep={setSendStep} />;
+    if (screen === "history") return <HistoryScreen transactions={transactions} activeTab={activeTab} setActiveTab={setActiveTab} contacts={contacts} setSelectedTx={setSelectedTx} goBack={goBack} />;
+    if (screen === "request") return <RequestScreen upiId={upiId} user={user} profile={profile} goBack={goBack} />;
+    if (screen === "bills") return <BillsScreen goBack={goBack} />;
+    if (screen === "addmoney") return <AddMoneyScreen addMoneyStep={addMoneyStep} setAddMoneyStep={setAddMoneyStep} addAmount={addAmount} setAddAmount={setAddAmount} balance={balance} linkedBanks={linkedBanks} goBack={goBack} handleAddMoney={handleAddMoney} setScreen={setScreen} />;
+    if (screen === "profile") return <ProfileScreen userName={userName} userInitial={userInitial} upiId={upiId} user={user} profile={profile} setProfile={setProfile} transactions={transactions} profileSaved={profileSaved} handleSaveProfile={handleSaveProfile} handleLogout={handleLogout} goBack={goBack} setBankStep={setBankStep} setScreen={setScreen} linkedBanks={linkedBanks} />;
+    if (screen === "banks") return <BanksScreen bankStep={bankStep} setBankStep={setBankStep} selectedBank={selectedBank} setSelectedBank={setSelectedBank} bankOtp={bankOtp} setBankOtp={setBankOtp} linkedBanks={linkedBanks} setLinkedBanks={setLinkedBanks} user={user} cloudMode={cloudMode} setScreen={setScreen} />;
+    return <HomeScreen userName={userName} userInitial={userInitial} balance={balance} balanceVisible={balanceVisible} setBalanceVisible={setBalanceVisible} transactions={transactions} contacts={contacts} setSelectedTx={setSelectedTx} navigate={navigate} setAddMoneyStep={setAddMoneyStep} setSendStep={setSendStep} />;
   };
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MAIN RENDER
+  // ═══════════════════════════════════════════════════════════════════════════
   return (
     <PhoneFrame>
       <div style={{ background: "#0a0a18", padding: "10px 24px 6px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
@@ -1447,7 +392,7 @@ export default function QuantumPay() {
         <span>🔋</span>
       </div>
       <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none", position: "relative" }}>
-        {selectedTx ? <TransactionReceipt /> : renderScreen()}
+        {selectedTx ? <TransactionReceipt selectedTx={selectedTx} setSelectedTx={setSelectedTx} linkedBanks={linkedBanks} /> : renderScreen()}
       </div>
       <div style={{ background: "rgba(10,10,24,0.97)", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-around", padding: "10px 0 18px", flexShrink: 0 }}>
         {[["🏠", "Home", "home"], ["💰", "Pay", "send"], ["🔍", "Scan", "scan"], ["📋", "History", "history"]].map(([icon, label, key]) => (
