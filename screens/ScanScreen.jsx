@@ -1,6 +1,7 @@
 // QuantumPay — Scan & Pay screen
 import { useEffect, useRef, useState } from 'react';
 import { S } from '../constants/styles';
+import { ArrowLeft, ArrowRight, Camera, Search, Square, AlertTriangle, QrCode } from 'lucide-react';
 
 export default function ScanScreen({
   upiId, userName, scanTab, setScanTab, payUpi, setPayUpi,
@@ -47,7 +48,7 @@ export default function ScanScreen({
           setScanning(false);
           setPayUpi(upi);
           // Auto-navigate to send screen
-          setSelectedContact({ name: upi, upi: upi, avatar: "👤", color: "#8b5cf6" });
+          setSelectedContact({ name: upi, upi: upi, color: "#8b5cf6" });
           setSendStep(2);
           navigate("send");
         },
@@ -70,7 +71,7 @@ export default function ScanScreen({
   return (
     <div style={{ padding: "16px 20px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <div onClick={goBack} style={S.backBtn}>←</div>
+        <div onClick={goBack} style={S.backBtn}><ArrowLeft size={20} color="#fff" /></div>
         <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Scan & Pay</div>
       </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
@@ -96,20 +97,20 @@ export default function ScanScreen({
         <div>
           {/* QR Scanner Area */}
           <div style={{ ...S.card, padding: 20, marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#8b5cf6", letterSpacing: 0.5 }}>📷 SCAN QR CODE</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#8b5cf6", letterSpacing: 0.5, display: "flex", alignItems: "center", gap: 6 }}><QrCode size={16} /> SCAN QR CODE</div>
             <div id="qr-reader" ref={scannerRef} style={{ width: 260, height: 260, borderRadius: 16, overflow: "hidden", background: "#000", border: "2px solid rgba(16,185,129,0.4)" }}>
               {!scanning && (
                 <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-                  <div style={{ fontSize: 48 }}>📸</div>
+                  <div style={{ color: "rgba(255,255,255,0.5)" }}><Camera size={48} /></div>
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", textAlign: "center", padding: "0 20px" }}>Tap button below to open camera</div>
                 </div>
               )}
             </div>
-            {scanError && <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 12, padding: "10px 14px", fontSize: 12, color: "#f43f5e", width: "100%", boxSizing: "border-box" }}>⚠️ {scanError}</div>}
+            {scanError && <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 12, padding: "10px 14px", fontSize: 12, color: "#f43f5e", width: "100%", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={14} color="#f43f5e" /> {scanError}</div>}
             {!scanning ? (
-              <div onClick={startScanner} style={{ ...S.gradBtn(false), width: "100%", boxSizing: "border-box" }}>🔍 Start Scanner</div>
+              <div onClick={startScanner} style={{ ...S.gradBtn(false), width: "100%", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Search size={16} /> Start Scanner</div>
             ) : (
-              <div onClick={stopScanner} style={{ background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 18, padding: "14px", textAlign: "center", fontSize: 14, fontWeight: 800, color: "#f43f5e", cursor: "pointer", width: "100%", boxSizing: "border-box" }}>⏹ Stop Scanner</div>
+              <div onClick={stopScanner} style={{ background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 18, padding: "14px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 14, fontWeight: 800, color: "#f43f5e", cursor: "pointer", width: "100%", boxSizing: "border-box" }}><Square size={16} fill="#f43f5e" /> Stop Scanner</div>
             )}
           </div>
 
@@ -123,7 +124,7 @@ export default function ScanScreen({
             <div style={S.label}>ENTER UPI ID MANUALLY</div>
             <input value={payUpi} onChange={e => setPayUpi(e.target.value.toLowerCase().replace(/\s/g, ""))} placeholder="e.g. alok@qpay" style={{ ...S.input }} />
           </div>
-          <div onClick={() => { if (payUpi.includes("@")) { setSelectedContact({ name: payUpi, upi: payUpi, avatar: "👤", color: "#8b5cf6" }); setSendStep(2); navigate("send"); } }} style={S.gradBtn(!payUpi.includes("@"))}>Pay Now →</div>
+          <div onClick={() => { if (payUpi.includes("@")) { setSelectedContact({ name: payUpi, upi: payUpi, color: "#8b5cf6" }); setSendStep(2); navigate("send"); } }} style={{ ...S.gradBtn(!payUpi.includes("@")), display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>Pay Now <ArrowRight size={18} color="#fff" /></div>
         </div>
       )}
     </div>

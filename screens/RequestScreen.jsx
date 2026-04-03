@@ -1,6 +1,7 @@
 // QuantumPay — Request money screen
 import { useState } from 'react';
 import { S } from '../constants/styles';
+import { ArrowLeft } from 'lucide-react';
 
 export default function RequestScreen({ upiId, user, profile, goBack }) {
   const [reqStep, setReqStep] = useState(1);
@@ -19,7 +20,7 @@ export default function RequestScreen({ upiId, user, profile, goBack }) {
         <div onClick={() => {
           if (reqStep === 2) setReqStep(1);
           else { setReqAmount(""); setReqNote(""); goBack(); }
-        }} style={S.backBtn}>←</div>
+        }} style={S.backBtn}><ArrowLeft size={20} color="#fff" /></div>
         <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Request Money</div>
       </div>
 

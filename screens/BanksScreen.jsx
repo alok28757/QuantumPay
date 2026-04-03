@@ -3,6 +3,7 @@ import { S } from '../constants/styles';
 import { db } from '../lib/firebase';
 import { LocalDB } from '../lib/localdb';
 import { doc, updateDoc } from 'firebase/firestore';
+import { ArrowLeft, Landmark, Check } from 'lucide-react';
 
 export default function BanksScreen({
   bankStep, setBankStep, selectedBank, setSelectedBank,
@@ -39,7 +40,7 @@ export default function BanksScreen({
             if (bankStep === 1) setScreen("profile");
             else if (bankStep === 4) setBankStep(2);
             else setBankStep(s => s - 1);
-          }} style={S.backBtn}>←</div>
+          }} style={S.backBtn}><ArrowLeft size={20} color="#fff" /></div>
           <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>
             {bankStep === 1 ? "Linked Banks" : "Add Bank Account"}
           </div>
@@ -49,7 +50,7 @@ export default function BanksScreen({
       {bankStep === 1 && <>
         {linkedBanks.length === 0 ? (
           <div style={{ padding: "40px 20px", textAlign: "center" }}>
-            <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.5 }}>🏦</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}><Landmark size={40} color="rgba(255,255,255,0.2)" /></div>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 8 }}>No Banks Linked</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 24 }}>Link a bank account to make seamless UPI payments on QuantumPay.</div>
           </div>
@@ -58,7 +59,7 @@ export default function BanksScreen({
             <div style={S.label}>YOUR LINKED ACCOUNTS</div>
             {linkedBanks.map(b => (
               <div key={b.id} style={{ ...S.card, padding: 16, display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🏦</div>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}><Landmark size={20} color="#10b981" /></div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{b.bankName}</div>
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>{b.type} • {b.accountNumber}</div>
@@ -96,7 +97,7 @@ export default function BanksScreen({
 
       {bankStep === 3 && (
         <div style={{ padding: "60px 20px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <div style={{ width: 60, height: 60, borderRadius: 30, background: "rgba(139,92,246,0.1)", border: "2px dashed #8b5cf6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, marginBottom: 24, animation: "spin 2s linear infinite" }}>🏦</div>
+          <div style={{ width: 60, height: 60, borderRadius: 30, background: "rgba(139,92,246,0.1)", border: "2px dashed #8b5cf6", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24, animation: "spin 2s linear infinite" }}><Landmark size={24} color="#8b5cf6" /></div>
           <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 8 }}>Fetching Bank Accounts</div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>Finding accounts linked to +91 {user?.phone} at {selectedBank?.label}...</div>
         </div>
@@ -104,7 +105,7 @@ export default function BanksScreen({
 
       {bankStep === 4 && <>
         <div style={{ ...S.card, padding: 24, textAlign: "center", marginBottom: 18 }}>
-          <div style={{ width: 50, height: 50, borderRadius: 25, background: "rgba(16,185,129,0.15)", margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>✅</div>
+          <div style={{ width: 50, height: 50, borderRadius: 25, background: "rgba(16,185,129,0.15)", margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center" }}><Check size={24} color="#10b981" /></div>
           <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", marginBottom: 6 }}>Account Found</div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>{selectedBank?.label} • Savings Account</div>
         </div>
@@ -116,7 +117,7 @@ export default function BanksScreen({
 
       {bankStep === 5 && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 50 }}>
-          <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, marginBottom: 22, boxShadow: "0 0 40px rgba(16,185,129,0.3)", animation: "pulseCheck 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both" }}>✓</div>
+          <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 22, boxShadow: "0 0 40px rgba(16,185,129,0.3)", animation: "pulseCheck 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both" }}><Check size={44} color="#fff" /></div>
           <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 8 }}>Bank Linked!</div>
           <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 32, textAlign: "center", padding: "0 20px" }}>You can now use your {selectedBank?.label} account for seamless UPI payments.</div>
           <div onClick={() => { setBankStep(1); setBankOtp(""); }} style={S.gradBtn(false)}>View Linked Banks</div>

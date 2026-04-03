@@ -1,6 +1,7 @@
 // QuantumPay — Transaction receipt overlay
 import { useState } from 'react';
 import { S } from '../constants/styles';
+import { X, ArrowDownLeft, ArrowUpRight, Check, ShieldCheck, ChevronRight, Share2, ArrowDown } from 'lucide-react';
 
 export default function TransactionReceipt({ selectedTx, setSelectedTx, linkedBanks }) {
   const [showPqcDetails, setShowPqcDetails] = useState(false);
@@ -15,13 +16,13 @@ export default function TransactionReceipt({ selectedTx, setSelectedTx, linkedBa
 
       {/* Main Receipt UI */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 30, opacity: showPqcDetails ? 0 : 1, transition: "opacity 0.3s" }}>
-        <div onClick={() => setSelectedTx(null)} style={S.backBtn}>✕</div>
+        <div onClick={() => setSelectedTx(null)} style={S.backBtn}><X size={20} color="#fff" /></div>
         <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Receipt</div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 30, opacity: showPqcDetails ? 0 : 1, transition: "opacity 0.3s" }}>
-        <div style={{ width: 80, height: 80, borderRadius: 40, background: isRx ? "rgba(74,222,128,0.15)" : "rgba(244,63,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, marginBottom: 16 }}>
-          {isRx ? "↓" : "↑"}
+        <div style={{ width: 80, height: 80, borderRadius: 40, background: isRx ? "rgba(74,222,128,0.15)" : "rgba(244,63,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+          {isRx ? <ArrowDownLeft size={40} color="#4ade80" /> : <ArrowUpRight size={40} color="#f43f5e" />}
         </div>
         <div style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,0.6)", marginBottom: 8 }}>{isRx ? "Received from" : "Paid to"}</div>
         <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 12 }}>{selectedTx.name}</div>
@@ -29,7 +30,7 @@ export default function TransactionReceipt({ selectedTx, setSelectedTx, linkedBa
           {isRx ? "+" : "−"}₹{selectedTx.amount.toLocaleString("en-IN")}
         </div>
         <div style={{ fontSize: 14, color: isRx ? "#4ade80" : "#f43f5e", display: "flex", alignItems: "center", gap: 6, background: isRx ? "rgba(74,222,128,0.1)" : "rgba(244,63,94,0.1)", padding: "4px 12px", borderRadius: 12 }}>
-          <span style={{ fontWeight: 900 }}>✓</span> {isRx ? "Received Successfully" : "Paid Successfully"}
+          <Check size={16} color={isRx ? "#4ade80" : "#f43f5e"} /> {isRx ? "Received Successfully" : "Paid Successfully"}
         </div>
       </div>
 
@@ -52,13 +53,13 @@ export default function TransactionReceipt({ selectedTx, setSelectedTx, linkedBa
 
       <div style={{ opacity: showPqcDetails ? 0 : 1, transition: "opacity 0.3s" }}>
         <div onClick={() => setShowPqcDetails(true)} style={{ textAlign: "center", padding: "14px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: 16, marginBottom: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          <span style={{ fontSize: 16 }}>🔒</span>
+          <ShieldCheck size={20} color="#10b981" />
           <span style={{ fontSize: 14, fontWeight: 800, color: "#10b981", letterSpacing: 0.5 }}>QUANTUM VALIDATED</span>
-          <span style={{ color: "#10b981", fontSize: 16 }}>›</span>
+          <ChevronRight size={20} color="#10b981" />
         </div>
 
-        <div onClick={() => alert("Mock: Receipt sharing opened")} style={{ ...S.gradBtn(false), background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.4)", color: "#a78bfa" }}>
-          📤 Share Receipt
+        <div onClick={() => alert("Mock: Receipt sharing opened")} style={{ ...S.gradBtn(false), background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.4)", color: "#a78bfa", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <Share2 size={18} color="#a78bfa" /> Share Receipt
         </div>
         <div style={{ textAlign: "center", marginTop: 24, paddingBottom: 20, fontSize: 12, color: "rgba(255,255,255,0.2)", fontWeight: 700, letterSpacing: 1 }}>POWERED BY QUANTUMPAY</div>
       </div>
@@ -66,7 +67,7 @@ export default function TransactionReceipt({ selectedTx, setSelectedTx, linkedBa
       {/* PQC Overlay */}
       {showPqcDetails && (
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "#050510", zIndex: 100, padding: 24, display: "flex", flexDirection: "column", overflowY: "auto", animation: "pulseCheck 0.3s ease-out" }}>
-          <div onClick={() => setShowPqcDetails(false)} style={{ ...S.backBtn, alignSelf: "flex-start", marginBottom: 24 }}>↓</div>
+          <div onClick={() => setShowPqcDetails(false)} style={{ ...S.backBtn, alignSelf: "flex-start", marginBottom: 24 }}><ArrowDown size={20} color="#fff" /></div>
 
           <div style={{ fontSize: 28, fontWeight: 900, color: "#10b981", marginBottom: 8, letterSpacing: -1 }}>Signature Valid</div>
           <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 32, lineHeight: 1.5 }}>This transaction was signed and verified using Post-Quantum Cryptography algorithms resilient to quantum computer attacks.</div>

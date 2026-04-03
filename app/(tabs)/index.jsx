@@ -30,6 +30,7 @@ import TransactionReceipt from "../../screens/TransactionReceipt";
 
 // ── Shared Components ────────────────────────────────────────────────────────
 import PhoneFrame from "../../components/PhoneFrame";
+import { BatteryFull, Home as HomeIcon, IndianRupee, ScanLine, History as HistoryIcon, Atom } from 'lucide-react';
 
 export default function QuantumPay() {
   // ═══════════════════════════════════════════════════════════════════════════
@@ -97,15 +98,19 @@ export default function QuantumPay() {
         .filter(tx => tx.sender_phone === phone || tx.receiver_phone === phone);
       if (txData.length > 0) {
         const decrypted = await Promise.all(txData.map(tx => tx.encrypted ? decryptTransaction(phone, tx) : Promise.resolve(tx)));
-        setTransactions(decrypted.map(tx => ({
-          id: tx.id,
-          name: tx.sender_phone === phone ? (tx.receiver_name || tx.receiver_phone) : (tx.sender_name || tx.sender_phone),
-          type: tx.sender_phone === phone ? "sent" : "received",
-          amount: Number(tx.amount),
-          time: new Date(tx.created_at).toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
-          note: tx.note || "Payment",
-          verified: !!tx.signature,
-        })));
+        const validTxs = decrypted.filter(tx => !isNaN(Number(tx.amount))); // Filter out documents encrypted for the other party
+        setTransactions(validTxs.map(tx => {
+          const isTrueSend = tx.sender_phone === phone && tx.receiver_phone !== phone;
+          return {
+            id: tx.id,
+            name: isTrueSend ? (tx.receiver_name || tx.receiver_phone) : (tx.sender_name || tx.sender_phone),
+            type: isTrueSend ? "sent" : "received",
+            amount: Number(tx.amount),
+            time: new Date(tx.created_at).toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+            note: tx.note || "Payment",
+            verified: !!tx.signature,
+          };
+        }));
       }
     } else {
       const d = LocalDB.getUsers()[phone];
@@ -389,16 +394,21 @@ export default function QuantumPay() {
     <PhoneFrame>
       <div style={{ background: "#0a0a18", padding: "10px 24px 6px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
         <span style={{ fontWeight: 800 }}>9:41</span>
-        <span style={{ fontSize: 11, fontWeight: 900, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 2 }}>⚛ QUANTUMPAY</span>
-        <span>🔋</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <Atom size={14} color="#06b6d4" />
+          <span style={{ fontSize: 11, fontWeight: 900, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 2 }}>QUANTUMPAY</span>
+        </div>
+        <span><BatteryFull size={14} color="rgba(255,255,255,0.5)" /></span>
       </div>
       <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none", position: "relative" }}>
         {selectedTx ? <TransactionReceipt selectedTx={selectedTx} setSelectedTx={setSelectedTx} linkedBanks={linkedBanks} /> : renderScreen()}
       </div>
       <div style={{ background: "rgba(10,10,24,0.97)", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-around", padding: "10px 0 18px", flexShrink: 0 }}>
-        {[["🏠", "Home", "home"], ["💰", "Pay", "send"], ["🔍", "Scan", "scan"], ["📋", "History", "history"]].map(([icon, label, key]) => (
+        {[[HomeIcon, "Home", "home"], [IndianRupee, "Pay", "send"], [ScanLine, "Scan", "scan"], [HistoryIcon, "History", "history"]].map(([Icon, label, key]) => (
           <div key={key} onClick={() => { if (key === "send") setSendStep(1); setScreen(key); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", opacity: screen === key ? 1 : 0.55 }}>
-            <span style={{ fontSize: 20 }}>{icon}</span>
+            <div style={{ height: 20, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Icon size={20} color={screen === key ? "#8b5cf6" : "rgba(255,255,255,0.5)"} />
+            </div>
             <span style={{ fontSize: 10, color: screen === key ? "#8b5cf6" : "rgba(255,255,255,0.5)", fontWeight: screen === key ? 800 : 600 }}>{label}</span>
           </div>
         ))}

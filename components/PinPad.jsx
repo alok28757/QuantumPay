@@ -1,4 +1,5 @@
-// QuantumPay — PIN input pad component
+import { Delete, Check } from 'lucide-react';
+
 export default function PinPad({ value, onChange }) {
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "✓"];
   return (
@@ -17,7 +18,7 @@ export default function PinPad({ value, onChange }) {
             else if (k === "✓") { if (value.length === 4) onChange(value, true); }
             else if (value.length < 4) onChange(value + k);
           }} style={{ height: 56, borderRadius: 16, background: k === "✓" ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: "#fff", cursor: "pointer", border: "1px solid rgba(255,255,255,0.06)", transition: "all 0.15s" }}>
-            {k}
+            {k === "⌫" ? <Delete size={22} color="#fff" /> : k === "✓" ? <Check size={22} color="#fff" /> : k}
           </div>
         ))}
       </div>

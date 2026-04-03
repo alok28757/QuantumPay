@@ -1,5 +1,6 @@
 // QuantumPay — Send money screen
 import { S } from '../constants/styles';
+import { ArrowLeft, ArrowRight, Search, X, User, ChevronRight, Smartphone, Landmark, Check, Delete } from 'lucide-react';
 
 export default function SendScreen({
   sendStep, setSendStep, selectedContact, setSelectedContact,
@@ -10,7 +11,7 @@ export default function SendScreen({
   return (
     <div style={{ padding: "16px 20px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-        <div onClick={() => sendStep > 1 ? setSendStep(s => s - 1) : goBack()} style={S.backBtn}>←</div>
+        <div onClick={() => sendStep > 1 ? setSendStep(s => s - 1) : goBack()} style={S.backBtn}><ArrowLeft size={20} color="#fff" /></div>
         <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Send Money</div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 5 }}>
           {[1, 2, 3].map(s => <div key={s} style={{ width: s <= sendStep ? 20 : 8, height: 6, borderRadius: 3, background: s <= sendStep ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.12)", transition: "all 0.3s" }} />)}
@@ -18,24 +19,24 @@ export default function SendScreen({
       </div>
       {sendStep === 1 && <>
         <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 14, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <span>🔍</span>
+          <Search size={16} color="rgba(255,255,255,0.4)" />
           <input value={upiSearch} onChange={e => setUpiSearch(e.target.value)} placeholder="Search name or enter UPI ID..." style={{ background: "none", border: "none", outline: "none", color: "#fff", fontSize: 14, flex: 1 }} />
-          {upiSearch && <span onClick={() => setUpiSearch("")} style={{ color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 18 }}>✕</span>}
+          {upiSearch && <X onClick={() => setUpiSearch("")} size={18} color="rgba(255,255,255,0.4)" style={{ cursor: "pointer" }} />}
         </div>
         {upiSearch && upiSearch.includes("@") && (
-          <div onClick={() => { setSelectedContact({ name: upiSearch, upi: upiSearch, avatar: "👤", color: "#8b5cf6" }); setSendStep(2); setUpiSearch(""); }} style={{ ...S.card, padding: "14px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", border: "1px solid rgba(139,92,246,0.4)" }}>
-            <div style={{ width: 40, height: 40, borderRadius: 20, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>👤</div>
+          <div onClick={() => { setSelectedContact({ name: upiSearch, upi: upiSearch, color: "#8b5cf6" }); setSendStep(2); setUpiSearch(""); }} style={{ ...S.card, padding: "14px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", border: "1px solid rgba(139,92,246,0.4)" }}>
+            <div style={{ width: 40, height: 40, borderRadius: 20, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", display: "flex", alignItems: "center", justifyContent: "center" }}><User size={20} color="#fff" /></div>
             <div>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>Send to UPI ID</div>
               <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>{upiSearch}</div>
             </div>
-            <div style={{ marginLeft: "auto", color: "#8b5cf6", fontSize: 20 }}>›</div>
+            <div style={{ marginLeft: "auto", color: "#8b5cf6", display: "flex", alignItems: "center" }}><ChevronRight size={20} /></div>
           </div>
         )}
         <div style={S.label}>CONTACTS</div>
         {contacts.length === 0 && !upiSearch ? (
           <div style={{ padding: "40px 20px", textAlign: "center" }}>
-            <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.5 }}>📱</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}><Smartphone size={40} color="rgba(255,255,255,0.2)" /></div>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 8 }}>Search to Pay</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.5 }}>Find anyone on QuantumPay by searching their name or UPI ID above.</div>
           </div>
@@ -44,19 +45,19 @@ export default function SendScreen({
         ) : (
           contacts.filter(c => !upiSearch || c.name.toLowerCase().includes(upiSearch.toLowerCase()) || c.upi.includes(upiSearch.toLowerCase())).map(c => (
             <div key={c.id} onClick={() => { setSelectedContact(c); setSendStep(2); setUpiSearch(""); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}>
-              <div style={{ width: 46, height: 46, borderRadius: 23, background: `${c.color}20`, border: `1px solid ${c.color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{c.avatar}</div>
+              <div style={{ width: 46, height: 46, borderRadius: 23, background: `${c.color}20`, border: `1px solid ${c.color}40`, display: "flex", alignItems: "center", justifyContent: "center", color: c.color }}><User size={22} /></div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{c.name}</div>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>{c.upi}</div>
               </div>
-              <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 20 }}>›</div>
+              <div style={{ color: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center" }}><ChevronRight size={20} /></div>
             </div>
           ))
         )}
       </>}
       {sendStep === 2 && selectedContact && <>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ width: 70, height: 70, borderRadius: 35, background: `${selectedContact.color}20`, border: `2px solid ${selectedContact.color}50`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34, margin: "0 auto 10px" }}>{selectedContact.avatar}</div>
+          <div style={{ width: 70, height: 70, borderRadius: 35, background: `${selectedContact.color}20`, border: `2px solid ${selectedContact.color}50`, display: "flex", alignItems: "center", justifyContent: "center", color: selectedContact.color, margin: "0 auto 10px" }}><User size={34} /></div>
           <div style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>{selectedContact.name}</div>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>{selectedContact.upi}</div>
         </div>
@@ -79,13 +80,13 @@ export default function SendScreen({
         ) : (
           <>
             <div style={{ ...S.card, padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(16,185,129,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🏦</div>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(16,185,129,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}><Landmark size={16} color="#10b981" /></div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>Paying from</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{linkedBanks[0].bankName} • {linkedBanks[0].accountNumber}</div>
               </div>
             </div>
-            <div onClick={() => amount && setSendStep(3)} style={S.gradBtn(!amount)}>Continue →</div>
+            <div onClick={() => amount && setSendStep(3)} style={{ ...S.gradBtn(!amount), display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>Continue <ArrowRight size={18} color="#fff" /></div>
           </>
         )}
       </>}
@@ -113,13 +114,15 @@ export default function SendScreen({
               if (k === "⌫") setPin(p => p.slice(0, -1));
               else if (k === "✓") { if (pin.length === 4) handleSend(); }
               else if (pin.length < 4) setPin(p => p + k);
-            }} style={{ height: 52, borderRadius: 14, background: k === "✓" ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "#fff", cursor: "pointer", border: "1px solid rgba(255,255,255,0.06)" }}>{k}</div>
+            }} style={{ height: 52, borderRadius: 14, background: k === "✓" ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "#fff", cursor: "pointer", border: "1px solid rgba(255,255,255,0.06)" }}>
+              {k === "⌫" ? <Delete size={20} color="#fff" /> : k === "✓" ? <Check size={20} color="#fff" /> : k}
+            </div>
           ))}
         </div>
       </>}
       {sendStep === 4 && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 50 }}>
-          <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, marginBottom: 22, boxShadow: "0 0 40px rgba(16,185,129,0.3)", animation: "pulseCheck 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both" }}>✓</div>
+          <div style={{ width: 90, height: 90, borderRadius: 45, background: "linear-gradient(135deg,#10b981,#4ade80)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 22, boxShadow: "0 0 40px rgba(16,185,129,0.3)", animation: "pulseCheck 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both" }}><Check size={44} color="#fff" /></div>
           <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 8 }}>Payment Sent!</div>
           <div style={{ fontSize: 34, fontWeight: 900, color: "#4ade80", marginBottom: 8 }}>₹{Number(amount).toLocaleString("en-IN")}</div>
           <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 30 }}>to {selectedContact?.name}</div>
