@@ -280,6 +280,7 @@ export default function QuantumPay() {
   };
 
   const handleSend = async () => {
+    if (!selectedContact) return;
     const amt = Number(amount);
     const senderPhone = Session.get();
     const senderName = profile.name || user?.name || "Someone";
