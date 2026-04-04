@@ -3,8 +3,7 @@ import { useEffect, useState } from "react";
 import { decryptTransaction, encryptTransaction, generatePQCKeys, getPQCPrivateKey, hashMpin, signTransaction, storePQCPrivateKey } from "../../lib/crypto";
 import { db, getSession, signInUser, signOutUser, signUpUser } from "../../lib/firebase";
 import { Session } from "../../lib/session";
-import { LocalDB } from "../../lib/localdb";
-import { checkFirebase, playSuccessSound } from "../../lib/utils";
+import { playSuccessSound } from "../../lib/utils";
 
 // ── Auth Screens ─────────────────────────────────────────────────────────────
 import SplashScreen from "../../screens/auth/SplashScreen";
@@ -66,7 +65,6 @@ export default function QuantumPay() {
   const [scanTab, setScanTab] = useState("my-qr");
   const [payUpi, setPayUpi] = useState("");
   const [balanceVisible, setBalanceVisible] = useState(true);
-  const [cloudMode, setCloudMode] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [linkedBanks, setLinkedBanks] = useState([]);
   const [bankStep, setBankStep] = useState(1);
@@ -77,84 +75,64 @@ export default function QuantumPay() {
   // ═══════════════════════════════════════════════════════════════════════════
   // DATA LAYER
   // ═══════════════════════════════════════════════════════════════════════════
-  const loadUserData = async (phone, isCloud) => {
-    const cloud = isCloud !== undefined ? isCloud : cloudMode;
-    if (cloud) {
-      const profileRef = doc(db, "profiles", phone);
-      const docSnap = await getDoc(profileRef);
-      if (docSnap.exists()) {
-        const p = docSnap.data();
-        setBalance(p.balance || 0);
-        setProfile({ name: p.name || "", phone });
-        setUser({ phone, name: p.name, dob: p.dob, upiId: p.upi_id, createdAt: p.created_at });
-        if (p.linked_banks) setLinkedBanks(p.linked_banks);
-      }
-      const txRef = collection(db, "transactions");
-      const q = query(txRef, orderBy("created_at", "desc"), limit(50));
-      const querySnapshot = await getDocs(q);
-      const txData = querySnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(tx => tx.sender_phone === phone || tx.receiver_phone === phone);
-      if (txData.length > 0) {
-        const decrypted = await Promise.all(txData.map(tx => tx.encrypted ? decryptTransaction(phone, tx) : Promise.resolve(tx)));
-        const validTxs = decrypted.filter(tx => !isNaN(Number(tx.amount))); // Filter out documents encrypted for the other party
-        setTransactions(validTxs.map(tx => {
-          const isTrueSend = tx.sender_phone === phone && tx.receiver_phone !== phone;
-          return {
-            id: tx.id,
-            name: isTrueSend ? (tx.receiver_name || tx.receiver_phone) : (tx.sender_name || tx.sender_phone),
-            type: isTrueSend ? "sent" : "received",
-            amount: Number(tx.amount),
-            time: new Date(tx.created_at).toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
-            note: tx.note || "Payment",
-            verified: !!tx.signature,
-          };
-        }));
-      }
-    } else {
-      const d = LocalDB.getUsers()[phone];
-      if (d) {
-        setBalance(d.balance || 0);
-        setTransactions(d.transactions || []);
-        setProfile({ name: d.name || "", phone });
-        setUser({ phone, ...d });
-        if (d.linkedBanks) setLinkedBanks(d.linkedBanks);
-      }
+  const loadUserData = async (phone) => {
+    const profileRef = doc(db, "profiles", phone);
+    const docSnap = await getDoc(profileRef);
+    if (docSnap.exists()) {
+      const p = docSnap.data();
+      setBalance(p.balance || 0);
+      setProfile({ name: p.name || "", phone });
+      setUser({ phone, name: p.name, dob: p.dob, upiId: p.upi_id, createdAt: p.created_at });
+      if (p.linked_banks) setLinkedBanks(p.linked_banks);
+    }
+    const txRef = collection(db, "transactions");
+    const q = query(txRef, orderBy("created_at", "desc"), limit(50));
+    const querySnapshot = await getDocs(q);
+    const txData = querySnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(tx => tx.sender_phone === phone || tx.receiver_phone === phone);
+    if (txData.length > 0) {
+      const decrypted = await Promise.all(txData.map(tx => tx.encrypted ? decryptTransaction(phone, tx) : Promise.resolve(tx)));
+      const validTxs = decrypted.filter(tx => !isNaN(Number(tx.amount)));
+      setTransactions(validTxs.map(tx => {
+        const isTrueSend = tx.sender_phone === phone && tx.receiver_phone !== phone;
+        return {
+          id: tx.id,
+          name: isTrueSend ? (tx.receiver_name || tx.receiver_phone) : (tx.sender_name || tx.sender_phone),
+          type: isTrueSend ? "sent" : "received",
+          amount: Number(tx.amount),
+          time: new Date(tx.created_at).toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+          note: tx.note || "Payment",
+          verified: !!tx.signature,
+        };
+      }));
     }
   };
 
   useEffect(() => {
     const init = async () => {
-      const isCloud = await checkFirebase();
-      setCloudMode(isCloud);
-      console.log("QuantumPay mode:", isCloud ? "☁️ CLOUD" : "💾 LOCAL");
+      console.log("QuantumPay mode: ☁️ CLOUD");
       const phone = Session.get();
       if (phone) {
-        if (isCloud) {
-          const session = await getSession();
-          if (session) { await loadUserData(phone, true); setAuthStep("app"); }
-        } else {
-          if (LocalDB.getUsers()[phone]) { await loadUserData(phone, false); setAuthStep("app"); }
-        }
-      }
-      if (isCloud) {
-        const txRef = collection(db, "transactions");
-        const unsubscribe = onSnapshot(txRef, (snapshot) => {
-          snapshot.docChanges().forEach((change) => {
-            if (change.type === "added") {
-              const tx = change.doc.data();
-              const cp = Session.get();
-              if (cp && (tx.sender_phone === cp || tx.receiver_phone === cp)) {
-                loadUserData(cp, true);
+        const session = await getSession();
+        if (session) {
+          await loadUserData(phone);
+          setAuthStep("app");
+          // Start real-time listener only after authenticated
+          const txRef = collection(db, "transactions");
+          const unsubscribe = onSnapshot(txRef, (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === "added") {
+                const tx = change.doc.data();
+                const cp = Session.get();
+                if (cp && (tx.sender_phone === cp || tx.receiver_phone === cp)) {
+                  loadUserData(cp);
+                }
               }
-            }
+            });
           });
-        });
-        return () => unsubscribe();
-      } else {
-        const h = (e) => { if (e.key === "qp_users") { const cp = Session.get(); if (cp) loadUserData(cp, false); } };
-        window.addEventListener("storage", h);
-        return () => window.removeEventListener("storage", h);
+          return () => unsubscribe();
+        }
       }
     };
     init();
@@ -171,13 +149,9 @@ export default function QuantumPay() {
   // ═══════════════════════════════════════════════════════════════════════════
   const handleRegisterPhone = async () => {
     if (!/^\d{10}$/.test(regPhone)) { setRegError("Enter a valid 10-digit phone number"); return; }
-    if (cloudMode) {
-      const docRef = doc(db, "profiles", regPhone);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) { setRegError("Already registered. Please login."); return; }
-    } else {
-      if (LocalDB.getUsers()[regPhone]) { setRegError("Already registered. Please login."); return; }
-    }
+    const docRef = doc(db, "profiles", regPhone);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) { setRegError("Already registered. Please login."); return; }
     setRegError(""); setAuthStep("register-profile");
   };
 
@@ -191,14 +165,9 @@ export default function QuantumPay() {
 
   const handleRegisterUpi = async () => {
     if (!regUpi.includes("@")) { setRegError("UPI ID must contain @"); return; }
-    if (cloudMode) {
-      const q = query(collection(db, "profiles"), where("upi_id", "==", regUpi), limit(1));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) { setRegError("This UPI ID is already taken."); return; }
-    } else {
-      const users = LocalDB.getUsers();
-      if (Object.values(users).some(u => u.upiId === regUpi)) { setRegError("This UPI ID is already taken."); return; }
-    }
+    const q = query(collection(db, "profiles"), where("upi_id", "==", regUpi), limit(1));
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) { setRegError("This UPI ID is already taken."); return; }
     setRegError(""); setAuthStep("register-mpin");
   };
 
@@ -214,18 +183,12 @@ export default function QuantumPay() {
       const hashedPin = await hashMpin(regMpin);
       const pqcKeys = generatePQCKeys();
       storePQCPrivateKey(regPhone, pqcKeys.privateKey);
-      if (cloudMode) {
-        const { data: authData, error: authErr } = await signUpUser(regPhone, hashedPin);
-        if (authErr) { setRegError("Registration failed: " + authErr.message); return; }
-        const userId = authData?.user?.uid;
-        try {
-          await setDoc(doc(db, "profiles", regPhone), { phone: regPhone, name: regName, dob: regDob, upi_id: regUpi, mpin: hashedPin, balance: 0, public_key: pqcKeys.publicKey, user_id: userId, created_at: new Date().toISOString() });
-        } catch (error) { setRegError("Registration failed: " + error.message); return; }
-      } else {
-        const users = LocalDB.getUsers();
-        users[regPhone] = { name: regName, dob: regDob, upiId: regUpi, mpin: hashedPin, balance: 0, transactions: [], createdAt: new Date().toISOString(), publicKey: pqcKeys.publicKey };
-        LocalDB.saveUsers(users);
-      }
+      const { data: authData, error: authErr } = await signUpUser(regPhone, hashedPin);
+      if (authErr) { setRegError("Registration failed: " + authErr.message); return; }
+      const userId = authData?.user?.uid;
+      try {
+        await setDoc(doc(db, "profiles", regPhone), { phone: regPhone, name: regName, dob: regDob, upi_id: regUpi, mpin: hashedPin, balance: 0, public_key: pqcKeys.publicKey, user_id: userId, created_at: new Date().toISOString() });
+      } catch (error) { setRegError("Registration failed: " + error.message); return; }
       Session.set(regPhone);
       await loadUserData(regPhone);
       setRegError(""); setAuthStep("welcome");
@@ -238,23 +201,17 @@ export default function QuantumPay() {
     if (done) {
       if (!/^\d{10}$/.test(loginPhone)) { setLoginError("Enter a valid 10-digit phone number"); setLoginMpin(""); return; }
       const hashedVal = await hashMpin(val);
-      if (cloudMode) {
-        const { error } = await signInUser(loginPhone, hashedVal);
-        if (error) {
-          const docRef = doc(db, "profiles", loginPhone);
-          const docSnap = await getDoc(docRef);
-          if (!docSnap.exists()) { setLoginError("Phone not registered. Please sign up."); setLoginMpin(""); return; }
-          const data = docSnap.data();
-          if (data.mpin !== hashedVal) { setLoginError("Wrong MPIN. Please try again."); setLoginMpin(""); return; }
-          const { data: authData } = await signUpUser(loginPhone, hashedVal);
-          if (authData?.user?.uid) {
-            await updateDoc(docRef, { user_id: authData.user.uid });
-          }
+      const { error } = await signInUser(loginPhone, hashedVal);
+      if (error) {
+        const docRef = doc(db, "profiles", loginPhone);
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) { setLoginError("Phone not registered. Please sign up."); setLoginMpin(""); return; }
+        const data = docSnap.data();
+        if (data.mpin !== hashedVal) { setLoginError("Wrong MPIN. Please try again."); setLoginMpin(""); return; }
+        const { data: authData } = await signUpUser(loginPhone, hashedVal);
+        if (authData?.user?.uid) {
+          await updateDoc(docRef, { user_id: authData.user.uid });
         }
-      } else {
-        const userData = LocalDB.getUsers()[loginPhone];
-        if (!userData) { setLoginError("Phone not registered. Please sign up."); setLoginMpin(""); return; }
-        if (userData.mpin !== hashedVal) { setLoginError("Wrong MPIN. Please try again."); setLoginMpin(""); return; }
       }
       Session.set(loginPhone); await loadUserData(loginPhone);
       setLoginError(""); setAuthStep("welcome");
@@ -263,7 +220,7 @@ export default function QuantumPay() {
   };
 
   const handleLogout = async () => {
-    if (cloudMode) await signOutUser();
+    await signOutUser();
     Session.clear();
     setUser(null); setProfile({ name: "", phone: "" }); setBalance(0); setTransactions([]);
     setLoginPhone(""); setLoginMpin(""); setLoginError("");
@@ -284,44 +241,32 @@ export default function QuantumPay() {
     const tx = { id: Date.now(), name: selectedContact.name, type: "sent", amount: amt, time: "Just now", note: note || "Payment" };
     setTransactions(p => [tx, ...p]); setBalance(b => b - amt); playSuccessSound(); setSendStep(4);
 
-    if (cloudMode) {
-      await runTransaction(db, async (transaction) => {
-        const senderRef = doc(db, "profiles", senderPhone);
-        const senderDoc = await transaction.get(senderRef);
-        if (!senderDoc.exists()) throw new Error("Sender not found");
-        transaction.update(senderRef, { balance: senderDoc.data().balance - amt });
-        const recipientQ = query(collection(db, "profiles"), where("upi_id", "==", recipientUpi), limit(1));
-        const recipientSnap = await getDocs(recipientQ);
-        if (!recipientSnap.empty) {
-          const recipientRef = doc(db, "profiles", recipientSnap.docs[0].id);
-          const recipientDoc = await transaction.get(recipientRef);
-          if (recipientDoc.exists()) {
-            transaction.update(recipientRef, { balance: recipientDoc.data().balance + amt });
-          }
+    await runTransaction(db, async (transaction) => {
+      const senderRef = doc(db, "profiles", senderPhone);
+      const senderDoc = await transaction.get(senderRef);
+      if (!senderDoc.exists()) throw new Error("Sender not found");
+      transaction.update(senderRef, { balance: senderDoc.data().balance - amt });
+      const recipientQ = query(collection(db, "profiles"), where("upi_id", "==", recipientUpi), limit(1));
+      const recipientSnap = await getDocs(recipientQ);
+      if (!recipientSnap.empty) {
+        const recipientRef = doc(db, "profiles", recipientSnap.docs[0].id);
+        const recipientDoc = await transaction.get(recipientRef);
+        if (recipientDoc.exists()) {
+          transaction.update(recipientRef, { balance: recipientDoc.data().balance + amt });
         }
-      });
-      const recipientQSingle = query(collection(db, "profiles"), where("upi_id", "==", recipientUpi), limit(1));
-      const recipientSnapSingle = await getDocs(recipientQSingle);
-      const recipientPhone = !recipientSnapSingle.empty ? recipientSnapSingle.docs[0].data().phone : recipientUpi;
-      const rawTx = { sender_phone: senderPhone, sender_name: senderName, receiver_phone: recipientPhone, receiver_name: selectedContact.name, amount: amt, note: note || "Payment", created_at: new Date().toISOString() };
-      const privKey = getPQCPrivateKey(senderPhone);
-      const signature = privKey ? signTransaction(privKey, { sender: senderPhone, receiver: rawTx.receiver_phone, amount: amt, time: Date.now() }) : null;
-      const senderEncTx = await encryptTransaction(senderPhone, rawTx);
-      await setDoc(doc(collection(db, "transactions")), { ...senderEncTx, signature, created_at: rawTx.created_at });
-      if (!recipientSnapSingle.empty) {
-        const receiverEncTx = await encryptTransaction(recipientPhone, rawTx);
-        await setDoc(doc(collection(db, "transactions")), { ...receiverEncTx, signature, created_at: rawTx.created_at });
       }
-    } else {
-      const users = LocalDB.getUsers();
-      users[senderPhone].balance = (users[senderPhone].balance || 0) - amt;
-      users[senderPhone].transactions = [{ id: Date.now(), name: selectedContact.name, type: "sent", amount: amt, time: "Just now", note: note || "Payment" }, ...(users[senderPhone].transactions || [])];
-      const rp = Object.keys(users).find(ph => users[ph].upiId === recipientUpi);
-      if (rp) {
-        users[rp].balance = (users[rp].balance || 0) + amt;
-        users[rp].transactions = [{ id: Date.now() + 1, name: senderName, type: "received", amount: amt, time: "Just now", note: "Payment from " + senderName }, ...(users[rp].transactions || [])];
-      }
-      LocalDB.saveUsers(users);
+    });
+    const recipientQSingle = query(collection(db, "profiles"), where("upi_id", "==", recipientUpi), limit(1));
+    const recipientSnapSingle = await getDocs(recipientQSingle);
+    const recipientPhone = !recipientSnapSingle.empty ? recipientSnapSingle.docs[0].data().phone : recipientUpi;
+    const rawTx = { sender_phone: senderPhone, sender_name: senderName, receiver_phone: recipientPhone, receiver_name: selectedContact.name, amount: amt, note: note || "Payment", created_at: new Date().toISOString() };
+    const privKey = getPQCPrivateKey(senderPhone);
+    const signature = privKey ? signTransaction(privKey, { sender: senderPhone, receiver: rawTx.receiver_phone, amount: amt, time: Date.now() }) : null;
+    const senderEncTx = await encryptTransaction(senderPhone, rawTx);
+    await setDoc(doc(collection(db, "transactions")), { ...senderEncTx, signature, created_at: rawTx.created_at });
+    if (!recipientSnapSingle.empty) {
+      const receiverEncTx = await encryptTransaction(recipientPhone, rawTx);
+      await setDoc(doc(collection(db, "transactions")), { ...receiverEncTx, signature, created_at: rawTx.created_at });
     }
   };
 
@@ -330,18 +275,11 @@ export default function QuantumPay() {
     const phone = Session.get();
     const tx = { id: Date.now(), name: "Wallet Top-up", type: "received", amount: amt, time: "Just now", note: "Added to wallet" };
     setTransactions(p => [tx, ...p]); setBalance(b => b + amt); playSuccessSound(); setAddMoneyStep(3);
-    if (cloudMode) {
-      const phoneRef = doc(db, "profiles", phone);
-      await updateDoc(phoneRef, { balance: balance + amt });
-      const rawTx = { sender_phone: phone, sender_name: "Wallet Top-up", receiver_phone: phone, receiver_name: profile.name || "Self", amount: amt, note: "Added to wallet", created_at: new Date().toISOString() };
-      const encTx = await encryptTransaction(phone, rawTx);
-      await setDoc(doc(collection(db, "transactions")), { ...encTx, created_at: rawTx.created_at });
-    } else {
-      const users = LocalDB.getUsers();
-      users[phone].balance = (users[phone].balance || 0) + amt;
-      users[phone].transactions = [{ id: Date.now(), name: "Wallet Top-up", type: "received", amount: amt, time: "Just now", note: "Added to wallet" }, ...(users[phone].transactions || [])];
-      LocalDB.saveUsers(users);
-    }
+    const phoneRef = doc(db, "profiles", phone);
+    await updateDoc(phoneRef, { balance: balance + amt });
+    const rawTx = { sender_phone: phone, sender_name: "Wallet Top-up", receiver_phone: phone, receiver_name: profile.name || "Self", amount: amt, note: "Added to wallet", created_at: new Date().toISOString() };
+    const encTx = await encryptTransaction(phone, rawTx);
+    await setDoc(doc(collection(db, "transactions")), { ...encTx, created_at: rawTx.created_at });
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -374,7 +312,7 @@ export default function QuantumPay() {
     if (screen === "bills") return <BillsScreen goBack={goBack} />;
     if (screen === "addmoney") return <AddMoneyScreen addMoneyStep={addMoneyStep} setAddMoneyStep={setAddMoneyStep} addAmount={addAmount} setAddAmount={setAddAmount} balance={balance} linkedBanks={linkedBanks} goBack={goBack} handleAddMoney={handleAddMoney} setScreen={setScreen} />;
     if (screen === "profile") return <ProfileScreen userName={userName} userInitial={userInitial} upiId={upiId} user={user} profile={profile} transactions={transactions} handleLogout={handleLogout} goBack={goBack} setBankStep={setBankStep} setScreen={setScreen} linkedBanks={linkedBanks} />;
-    if (screen === "banks") return <BanksScreen bankStep={bankStep} setBankStep={setBankStep} selectedBank={selectedBank} setSelectedBank={setSelectedBank} bankOtp={bankOtp} setBankOtp={setBankOtp} linkedBanks={linkedBanks} setLinkedBanks={setLinkedBanks} user={user} cloudMode={cloudMode} setScreen={setScreen} />;
+    if (screen === "banks") return <BanksScreen bankStep={bankStep} setBankStep={setBankStep} selectedBank={selectedBank} setSelectedBank={setSelectedBank} bankOtp={bankOtp} setBankOtp={setBankOtp} linkedBanks={linkedBanks} setLinkedBanks={setLinkedBanks} user={user} setScreen={setScreen} />;
     return <HomeScreen userName={userName} userInitial={userInitial} balance={balance} balanceVisible={balanceVisible} setBalanceVisible={setBalanceVisible} transactions={transactions} contacts={contacts} setSelectedTx={setSelectedTx} navigate={navigate} setAddMoneyStep={setAddMoneyStep} setSendStep={setSendStep} />;
   };
 

@@ -1,14 +1,13 @@
 // QuantumPay — Bank linking screen
 import { S } from '../constants/styles';
 import { db } from '../lib/firebase';
-import { LocalDB } from '../lib/localdb';
 import { doc, updateDoc } from 'firebase/firestore';
 import { ArrowLeft, Landmark, Check } from 'lucide-react';
 
 export default function BanksScreen({
   bankStep, setBankStep, selectedBank, setSelectedBank,
   bankOtp, setBankOtp, linkedBanks, setLinkedBanks,
-  user, cloudMode, setScreen,
+  user, setScreen,
 }) {
   const handleLinkBank = async () => {
     const newBank = {
@@ -20,14 +19,8 @@ export default function BanksScreen({
     const updated = [...linkedBanks, newBank];
     setLinkedBanks(updated);
 
-    if (cloudMode && user?.phone) {
+    if (user?.phone) {
       await updateDoc(doc(db, "profiles", user.phone), { linked_banks: updated });
-    } else if (user?.phone) {
-      const users = LocalDB.getUsers();
-      if (users[user.phone]) {
-        users[user.phone].linkedBanks = updated;
-        LocalDB.saveUsers(users);
-      }
     }
     setBankStep(5);
   };
