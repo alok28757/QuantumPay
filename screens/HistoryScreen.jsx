@@ -1,14 +1,12 @@
 // QuantumPay — History screen
 import { S } from '../constants/styles';
 import TxRow from '../components/TxRow';
-import { ArrowLeft } from 'lucide-react';
 
 export default function HistoryScreen({ transactions, activeTab, setActiveTab, contacts, setSelectedTx, goBack }) {
   const filteredTx = transactions.filter(t => activeTab === "all" ? true : t.type === activeTab);
   return (
     <div style={{ padding: "16px 20px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-        <div onClick={goBack} style={S.backBtn}><ArrowLeft size={20} color="#fff" /></div>
+      <div style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>History</div>
       </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>

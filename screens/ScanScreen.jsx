@@ -70,8 +70,7 @@ export default function ScanScreen({
 
   return (
     <div style={{ padding: "16px 20px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <div onClick={goBack} style={S.backBtn}><ArrowLeft size={20} color="#fff" /></div>
+      <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Scan & Pay</div>
       </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>

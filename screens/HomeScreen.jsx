@@ -2,7 +2,7 @@
 import { BILLS } from '../constants/data';
 import { S } from '../constants/styles';
 import TxRow from '../components/TxRow';
-import { Bell, Eye, EyeOff, Send, Download, ScanLine, Plus, ArrowRight } from 'lucide-react';
+import { Bell, Eye, EyeOff, Send, Download, ScanLine, Plus, ArrowRight, ChevronRight } from 'lucide-react';
 
 export default function HomeScreen({
   userName, userInitial, balance, balanceVisible, setBalanceVisible,
@@ -14,14 +14,14 @@ export default function HomeScreen({
       <div style={{ background: "linear-gradient(160deg,#1a0533 0%,#0d0d1f 65%)", padding: "18px 20px 30px", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: -60, right: -60, width: 220, height: 220, borderRadius: "50%", background: "radial-gradient(circle,rgba(139,92,246,0.2) 0%,transparent 70%)" }} />
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 1 }}>WELCOME BACK</div>
-            <div style={{ fontSize: 20, fontWeight: 900, color: "#fff" }}>{userName}</div>
+          <div onClick={() => navigate("profile")} style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+            <div style={{ width: 42, height: 42, borderRadius: 21, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 900, color: "#fff", boxShadow: "0 0 20px rgba(139,92,246,0.3)" }}>{userInitial}</div>
+            <div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 1 }}>WELCOME BACK</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>{userName} <ChevronRight size={14} color="rgba(255,255,255,0.3)" style={{ verticalAlign: "middle" }} /></div>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <div style={{ width: 38, height: 38, borderRadius: 19, background: "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><Bell size={18} color="#fff" /></div>
-            <div onClick={() => navigate("profile")} style={{ width: 38, height: 38, borderRadius: 19, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 900, color: "#fff", cursor: "pointer", letterSpacing: 0 }} title="Profile">{userInitial}</div>
-          </div>
+          <div style={{ width: 38, height: 38, borderRadius: 19, background: "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><Bell size={18} color="#fff" /></div>
         </div>
 
         <div style={{ ...S.card, padding: "18px 22px" }}>

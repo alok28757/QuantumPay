@@ -29,7 +29,7 @@ import TransactionReceipt from "../../screens/TransactionReceipt";
 
 // ── Shared Components ────────────────────────────────────────────────────────
 import PhoneFrame from "../../components/PhoneFrame";
-import { BatteryFull, Home as HomeIcon, IndianRupee, ScanLine, History as HistoryIcon, Atom } from 'lucide-react';
+import { BatteryFull, Home as HomeIcon, ScanLine, History as HistoryIcon, Atom } from 'lucide-react';
 
 export default function QuantumPay() {
   // ═══════════════════════════════════════════════════════════════════════════
@@ -333,18 +333,14 @@ export default function QuantumPay() {
         {selectedTx ? <TransactionReceipt selectedTx={selectedTx} setSelectedTx={setSelectedTx} linkedBanks={linkedBanks} /> : renderScreen()}
       </div>
       <div style={{ background: "rgba(10,10,24,0.97)", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-around", padding: "10px 0 18px", flexShrink: 0 }}>
-        {[[HomeIcon, "Home", "home"], [IndianRupee, "Pay", "send"], [ScanLine, "Scan", "scan"], [HistoryIcon, "History", "history"]].map(([Icon, label, key]) => (
-          <div key={key} onClick={() => { if (key === "send") setSendStep(1); setScreen(key); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", opacity: screen === key ? 1 : 0.55 }}>
+        {[[HomeIcon, "Home", "home"], [ScanLine, "Scan", "scan"], [HistoryIcon, "History", "history"]].map(([Icon, label, key]) => (
+          <div key={key} onClick={() => setScreen(key)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", opacity: screen === key ? 1 : 0.55 }}>
             <div style={{ height: 20, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Icon size={20} color={screen === key ? "#8b5cf6" : "rgba(255,255,255,0.5)"} />
             </div>
             <span style={{ fontSize: 10, color: screen === key ? "#8b5cf6" : "rgba(255,255,255,0.5)", fontWeight: screen === key ? 800 : 600 }}>{label}</span>
           </div>
         ))}
-        <div onClick={() => setScreen("profile")} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", opacity: screen === "profile" ? 1 : 0.55 }}>
-          <div style={{ width: 24, height: 24, borderRadius: 12, background: screen === "profile" ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 900, color: "#fff" }}>{userInitial}</div>
-          <span style={{ fontSize: 10, color: screen === "profile" ? "#8b5cf6" : "rgba(255,255,255,0.5)", fontWeight: screen === "profile" ? 800 : 600 }}>Profile</span>
-        </div>
       </div>
     </PhoneFrame>
   );
