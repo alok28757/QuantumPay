@@ -4,6 +4,7 @@ import { decryptTransaction, encryptTransaction, generatePQCKeys, getPQCPrivateK
 import { db, getSession, signInUser, signOutUser, signUpUser } from "../../lib/firebase";
 import { Session } from "../../lib/session";
 import { playSuccessSound } from "../../lib/utils";
+import { StripeProvider } from '@stripe/stripe-react-native';
 
 // ── Auth Screens ─────────────────────────────────────────────────────────────
 import SplashScreen from "../../screens/auth/SplashScreen";
@@ -320,28 +321,30 @@ export default function QuantumPay() {
   // MAIN RENDER
   // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <PhoneFrame>
-      <div style={{ background: "#0a0a18", padding: "10px 24px 6px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
-        <span style={{ fontWeight: 800 }}>9:41</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <Atom size={14} color="#06b6d4" />
-          <span style={{ fontSize: 11, fontWeight: 900, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 2 }}>QUANTUMPAY</span>
-        </div>
-        <span><BatteryFull size={14} color="rgba(255,255,255,0.5)" /></span>
-      </div>
-      <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none", position: "relative" }}>
-        {selectedTx ? <TransactionReceipt selectedTx={selectedTx} setSelectedTx={setSelectedTx} linkedBanks={linkedBanks} /> : renderScreen()}
-      </div>
-      <div style={{ background: "rgba(10,10,24,0.97)", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-around", padding: "10px 0 18px", flexShrink: 0 }}>
-        {[[HomeIcon, "Home", "home"], [ScanLine, "Scan", "scan"], [HistoryIcon, "History", "history"]].map(([Icon, label, key]) => (
-          <div key={key} onClick={() => setScreen(key)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", opacity: screen === key ? 1 : 0.55 }}>
-            <div style={{ height: 20, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Icon size={20} color={screen === key ? "#8b5cf6" : "rgba(255,255,255,0.5)"} />
-            </div>
-            <span style={{ fontSize: 10, color: screen === key ? "#8b5cf6" : "rgba(255,255,255,0.5)", fontWeight: screen === key ? 800 : 600 }}>{label}</span>
+    <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""}>
+      <PhoneFrame>
+        <div style={{ background: "#0a0a18", padding: "10px 24px 6px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
+          <span style={{ fontWeight: 800 }}>9:41</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <Atom size={14} color="#06b6d4" />
+            <span style={{ fontSize: 11, fontWeight: 900, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 2 }}>QUANTUMPAY</span>
           </div>
-        ))}
-      </div>
-    </PhoneFrame>
+          <span><BatteryFull size={14} color="rgba(255,255,255,0.5)" /></span>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none", position: "relative" }}>
+          {selectedTx ? <TransactionReceipt selectedTx={selectedTx} setSelectedTx={setSelectedTx} linkedBanks={linkedBanks} /> : renderScreen()}
+        </div>
+        <div style={{ background: "rgba(10,10,24,0.97)", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-around", padding: "10px 0 18px", flexShrink: 0 }}>
+          {[[HomeIcon, "Home", "home"], [ScanLine, "Scan", "scan"], [HistoryIcon, "History", "history"]].map(([Icon, label, key]) => (
+            <div key={key} onClick={() => setScreen(key)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", opacity: screen === key ? 1 : 0.55 }}>
+              <div style={{ height: 20, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon size={20} color={screen === key ? "#8b5cf6" : "rgba(255,255,255,0.5)"} />
+              </div>
+              <span style={{ fontSize: 10, color: screen === key ? "#8b5cf6" : "rgba(255,255,255,0.5)", fontWeight: screen === key ? 800 : 600 }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      </PhoneFrame>
+    </StripeProvider>
   );
 }
