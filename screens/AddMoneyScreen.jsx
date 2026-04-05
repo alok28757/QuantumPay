@@ -2,7 +2,7 @@
 import { S } from '../constants/styles';
 import { ArrowLeft, ArrowRight, Landmark, CreditCard, Smartphone, ChevronRight, Check } from 'lucide-react';
 
-import { useStripe } from '@stripe/stripe-react-native';
+import { useStripe } from '../lib/stripeWrapper';
 import { fetchPaymentIntent } from '../lib/api';
 
 export default function AddMoneyScreen({

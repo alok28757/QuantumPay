@@ -4,7 +4,7 @@ import { decryptTransaction, encryptTransaction, generatePQCKeys, getPQCPrivateK
 import { db, getSession, signInUser, signOutUser, signUpUser } from "../../lib/firebase";
 import { Session } from "../../lib/session";
 import { playSuccessSound } from "../../lib/utils";
-import { StripeProvider } from '@stripe/stripe-react-native';
+import { StripeProvider } from '../../lib/stripeWrapper';
 
 // ── Auth Screens ─────────────────────────────────────────────────────────────
 import SplashScreen from "../../screens/auth/SplashScreen";
