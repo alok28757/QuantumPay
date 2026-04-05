@@ -8,8 +8,8 @@ app.use(cors());
 app.use(express.json());
 
 // Initialize Stripe with the secret key from .env
-const stripeConfig = process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.startsWith('sk_') 
-  ? process.env.STRIPE_SECRET_KEY 
+const stripeConfig = process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.startsWith('sk_')
+  ? process.env.STRIPE_SECRET_KEY
   : "sk_test_mock"; // Prevents crash if user forgets to set key initially
 const stripe = Stripe(stripeConfig);
 
@@ -22,7 +22,7 @@ app.get("/health", (req, res) => {
 app.post("/api/payment/create-intent", async (req, res) => {
   try {
     const { amount, currency = "inr", description } = req.body;
-    
+
     // Amount must be in the smallest currency unit (paise for INR)
     // So ₹500 * 100 = 50000 paise
     const paymentIntent = await stripe.paymentIntents.create({
@@ -45,5 +45,5 @@ app.post("/api/payment/create-intent", async (req, res) => {
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`🚀 QuantumPay Backend running on http://localhost:${PORT}`);
+  console.log(` QuantumPay Backend running on http://localhost:${PORT}`);
 });
