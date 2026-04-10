@@ -5,6 +5,7 @@ import { db, getSession, signInUser, signOutUser, signUpUser } from "../../lib/f
 import { Session } from "../../lib/session";
 import { playSuccessSound } from "../../lib/utils";
 import { StripeProvider } from '../../lib/stripeWrapper';
+import { addMoneyToWalletApi, sendMoneyApi } from '../../lib/api';
 
 // ── Auth Screens ─────────────────────────────────────────────────────────────
 import SplashScreen from "../../screens/auth/SplashScreen";
@@ -239,48 +240,46 @@ export default function QuantumPay() {
     const senderPhone = Session.get();
     const senderName = profile.name || user?.name || "Someone";
     const recipientUpi = selectedContact.upi;
-    const tx = { id: Date.now(), name: selectedContact.name, type: "sent", amount: amt, time: "Just now", note: note || "Payment" };
-    setTransactions(p => [tx, ...p]); setBalance(b => b - amt); playSuccessSound(); setSendStep(4);
 
-    await runTransaction(db, async (transaction) => {
-      const senderRef = doc(db, "profiles", senderPhone);
-      const senderDoc = await transaction.get(senderRef);
-      if (!senderDoc.exists()) throw new Error("Sender not found");
-      transaction.update(senderRef, { balance: senderDoc.data().balance - amt });
-      const recipientQ = query(collection(db, "profiles"), where("upi_id", "==", recipientUpi), limit(1));
-      const recipientSnap = await getDocs(recipientQ);
-      if (!recipientSnap.empty) {
-        const recipientRef = doc(db, "profiles", recipientSnap.docs[0].id);
-        const recipientDoc = await transaction.get(recipientRef);
-        if (recipientDoc.exists()) {
-          transaction.update(recipientRef, { balance: recipientDoc.data().balance + amt });
-        }
-      }
-    });
     const recipientQSingle = query(collection(db, "profiles"), where("upi_id", "==", recipientUpi), limit(1));
     const recipientSnapSingle = await getDocs(recipientQSingle);
     const recipientPhone = !recipientSnapSingle.empty ? recipientSnapSingle.docs[0].data().phone : recipientUpi;
     const rawTx = { sender_phone: senderPhone, sender_name: senderName, receiver_phone: recipientPhone, receiver_name: selectedContact.name, amount: amt, note: note || "Payment", created_at: new Date().toISOString() };
-    const privKey = getPQCPrivateKey(senderPhone);
-    const signature = privKey ? signTransaction(privKey, { sender: senderPhone, receiver: rawTx.receiver_phone, amount: amt, time: Date.now() }) : null;
+    
     const senderEncTx = await encryptTransaction(senderPhone, rawTx);
-    await setDoc(doc(collection(db, "transactions")), { ...senderEncTx, signature, created_at: rawTx.created_at });
+    let receiverEncTx = null;
     if (!recipientSnapSingle.empty) {
-      const receiverEncTx = await encryptTransaction(recipientPhone, rawTx);
-      await setDoc(doc(collection(db, "transactions")), { ...receiverEncTx, signature, created_at: rawTx.created_at });
+      receiverEncTx = await encryptTransaction(recipientPhone, rawTx);
     }
+
+    const res = await sendMoneyApi({
+        senderPhone, recipientUpi, amount: amt, senderEncTx, receiverEncTx
+    });
+
+    if (res.error) {
+       alert("Failed to send: " + res.error);
+       return;
+    }
+
+    const tx = { id: Date.now(), name: selectedContact.name, type: "sent", amount: amt, time: "Just now", note: note || "Payment" };
+    setTransactions(p => [tx, ...p]); setBalance(b => b - amt); playSuccessSound(); setSendStep(4);
   };
 
   const handleAddMoney = async () => {
     const amt = Number(addAmount); if (!amt) return;
     const phone = Session.get();
-    const tx = { id: Date.now(), name: "Wallet Top-up", type: "received", amount: amt, time: "Just now", note: "Added to wallet" };
-    setTransactions(p => [tx, ...p]); setBalance(b => b + amt); playSuccessSound(); setAddMoneyStep(3);
-    const phoneRef = doc(db, "profiles", phone);
-    await updateDoc(phoneRef, { balance: balance + amt });
+    
     const rawTx = { sender_phone: phone, sender_name: "Wallet Top-up", receiver_phone: phone, receiver_name: profile.name || "Self", amount: amt, note: "Added to wallet", created_at: new Date().toISOString() };
     const encTx = await encryptTransaction(phone, rawTx);
-    await setDoc(doc(collection(db, "transactions")), { ...encTx, created_at: rawTx.created_at });
+
+    const res = await addMoneyToWalletApi({ phone, amount: amt, encTx });
+    if (res.error) {
+       alert("Failed to add money: " + res.error);
+       return;
+    }
+
+    const tx = { id: Date.now(), name: "Wallet Top-up", type: "received", amount: amt, time: "Just now", note: "Added to wallet" };
+    setTransactions(p => [tx, ...p]); setBalance(b => b + amt); playSuccessSound(); setAddMoneyStep(3);
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
