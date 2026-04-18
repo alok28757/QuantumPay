@@ -1,39 +1,56 @@
-// QuantumPay — Add money screen
+// QuantumPay — Add money screen (Razorpay)
 import { S } from '../constants/styles';
 import { ArrowLeft, ArrowRight, Landmark, CreditCard, Smartphone, ChevronRight, Check } from 'lucide-react';
 
-import { useStripe } from '../lib/stripeWrapper';
-import { fetchPaymentIntent } from '../lib/api';
+import { useRazorpay } from '../lib/razorpayWrapper';
+import { createRazorpayOrder, verifyRazorpayPayment } from '../lib/api';
+import { Session } from '../lib/session';
 
 export default function AddMoneyScreen({
   addMoneyStep, setAddMoneyStep, addAmount, setAddAmount,
   balance, linkedBanks, goBack, handleAddMoney, setScreen,
 }) {
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const { openCheckout } = useRazorpay();
 
-  const handleStripeCheckout = async () => {
+  const handleRazorpayCheckout = async (phone) => {
     if (!addAmount) return;
     try {
-      const { clientSecret, error } = await fetchPaymentIntent(addAmount);
-      if (error || !clientSecret) throw new Error(error || "Missing client secret");
+      const { data, error } = await createRazorpayOrder(Number(addAmount), phone);
+      if (error || !data) throw new Error(error || "Failed to create order");
 
-      const { error: initError } = await initPaymentSheet({
-        paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: 'QuantumPay',
+      // Open Razorpay checkout
+      const response = await openCheckout({
+        key: data.key,
+        amount: data.amount,
+        currency: data.currency,
+        order_id: data.orderId,
+        name: "QuantumPay",
+        description: "Wallet Top-up",
+        prefill: {
+          contact: phone,
+        },
+        theme: {
+          color: "#8b5cf6",
+        },
       });
-      if (initError) throw new Error(initError.message);
 
-      const { error: presentError } = await presentPaymentSheet();
-      if (presentError) {
-        if (presentError.code === 'Canceled') return; // User simply closed the sheet
-        throw new Error(presentError.message);
-      }
+      // Payment successful — verify signature on backend
+      const verifyRes = await verifyRazorpayPayment({
+        razorpay_order_id: response.razorpay_order_id,
+        razorpay_payment_id: response.razorpay_payment_id,
+        razorpay_signature: response.razorpay_signature,
+        phone,
+        amount: Number(addAmount),
+      });
 
-      // Success! Update app state and Firebase
+      if (verifyRes.error) throw new Error(verifyRes.error);
+
+      // Backend verified and credited — update UI
       handleAddMoney();
     } catch (e) {
+      if (e.message === "Payment cancelled by user") return;
       console.warn("Payment failed:", e.message);
-      alert("Payment Failed: " + e.message); // simple fallback alert
+      alert("Payment Failed: " + e.message);
     }
   };
 
@@ -74,7 +91,7 @@ export default function AddMoneyScreen({
         </div>
         <div style={S.label}>SELECT PAYMENT METHOD</div>
         {linkedBanks.length > 0 && (
-          <div onClick={() => handleStripeCheckout()} style={{ ...S.card, padding: 16, marginTop: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 14, cursor: "pointer", border: "1px solid rgba(16,185,129,0.4)" }}>
+          <div onClick={() => handleRazorpayCheckout(Session.get())} style={{ ...S.card, padding: 16, marginTop: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 14, cursor: "pointer", border: "1px solid rgba(16,185,129,0.4)" }}>
             <div style={{ width: 46, height: 46, borderRadius: 14, background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}><Landmark size={22} color="#10b981" /></div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{linkedBanks[0].bankName}</div>
@@ -88,7 +105,7 @@ export default function AddMoneyScreen({
           { icon: CreditCard, label: "Debit / Credit Card", sub: "Visa, Mastercard, RuPay", color: "#8b5cf6" },
           { icon: Smartphone, label: "UPI Transfer", sub: "Pay via any UPI app", color: "#10b981" },
         ].map(m => (
-          <div key={m.label} onClick={() => handleStripeCheckout()} style={{ ...S.card, padding: 16, marginTop: 12, display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
+          <div key={m.label} onClick={() => handleRazorpayCheckout(Session.get())} style={{ ...S.card, padding: 16, marginTop: 12, display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
             <div style={{ width: 46, height: 46, borderRadius: 14, background: `${m.color}18`, border: `1px solid ${m.color}30`, display: "flex", alignItems: "center", justifyContent: "center", color: m.color }}><m.icon size={22} /></div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{m.label}</div>

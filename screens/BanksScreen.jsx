@@ -2,7 +2,8 @@
 import { S } from '../constants/styles';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, Landmark, Check } from 'lucide-react';
+import { ArrowLeft, Landmark, Check, ArrowDownToLine } from 'lucide-react';
+import { withdrawBankApi } from '../lib/api';
 
 export default function BanksScreen({
   bankStep, setBankStep, selectedBank, setSelectedBank,
@@ -23,6 +24,18 @@ export default function BanksScreen({
       await updateDoc(doc(db, "profiles", user.phone), { linked_banks: updated });
     }
     setBankStep(5);
+  };
+
+  const handleWithdraw = async () => {
+    const amt = window.prompt("Enter amount to withdraw to this bank (in ₹):");
+    if (!amt || isNaN(amt)) return;
+    
+    const res = await withdrawBankApi(user.phone, Number(amt));
+    if (res.success) {
+       alert("Success! Transferred ₹" + amt + " to your bank.\nRef: " + res.transfer_id);
+    } else {
+       alert("Withdrawal Failed: " + (res.error || "Unknown error"));
+    }
   };
 
   return (
@@ -57,7 +70,9 @@ export default function BanksScreen({
                   <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{b.bankName}</div>
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>{b.type} • {b.accountNumber}</div>
                 </div>
-                <div style={{ fontSize: 12, color: "#10b981", fontWeight: 700, background: "rgba(16,185,129,0.1)", padding: "4px 8px", borderRadius: 8 }}>Primary</div>
+                <div onClick={handleWithdraw} style={{ fontSize: 12, color: "#fff", fontWeight: 700, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", padding: "7px 12px", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                  Withdraw <ArrowDownToLine size={14} color="#fff" />
+                </div>
               </div>
             ))}
           </div>

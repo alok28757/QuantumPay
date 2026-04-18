@@ -4,8 +4,7 @@ import { decryptTransaction, encryptTransaction, generatePQCKeys, getPQCPrivateK
 import { db, getSession, signInUser, signOutUser, signUpUser } from "../../lib/firebase";
 import { Session } from "../../lib/session";
 import { playSuccessSound } from "../../lib/utils";
-import { StripeProvider } from '../../lib/stripeWrapper';
-import { addMoneyToWalletApi, sendMoneyApi } from '../../lib/api';
+import { sendMoneyApi } from '../../lib/api';
 
 // ── Auth Screens ─────────────────────────────────────────────────────────────
 import SplashScreen from "../../screens/auth/SplashScreen";
@@ -266,20 +265,11 @@ export default function QuantumPay() {
   };
 
   const handleAddMoney = async () => {
+    // The Stripe Webhook will handle all database logic.
+    // We only need to play the sound and change the UI step.
     const amt = Number(addAmount); if (!amt) return;
-    const phone = Session.get();
-    
-    const rawTx = { sender_phone: phone, sender_name: "Wallet Top-up", receiver_phone: phone, receiver_name: profile.name || "Self", amount: amt, note: "Added to wallet", created_at: new Date().toISOString() };
-    const encTx = await encryptTransaction(phone, rawTx);
-
-    const res = await addMoneyToWalletApi({ phone, amount: amt, encTx });
-    if (res.error) {
-       alert("Failed to add money: " + res.error);
-       return;
-    }
-
-    const tx = { id: Date.now(), name: "Wallet Top-up", type: "received", amount: amt, time: "Just now", note: "Added to wallet" };
-    setTransactions(p => [tx, ...p]); setBalance(b => b + amt); playSuccessSound(); setAddMoneyStep(3);
+    playSuccessSound(); 
+    setAddMoneyStep(3);
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -320,7 +310,7 @@ export default function QuantumPay() {
   // MAIN RENDER
   // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""}>
+    <>
       <PhoneFrame>
         <div style={{ background: "#0a0a18", padding: "10px 24px 6px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
           <span style={{ fontWeight: 800 }}>9:41</span>
@@ -344,6 +334,6 @@ export default function QuantumPay() {
           ))}
         </div>
       </PhoneFrame>
-    </StripeProvider>
+    </>
   );
 }
