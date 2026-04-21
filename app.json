@@ -40,13 +40,6 @@
           }
         }
       ],
-      [
-        "@stripe/stripe-react-native",
-        {
-          "merchantIdentifier": "com.alokiiie.QunatumPay",
-          "enableGooglePay": false
-        }
-      ]
     ],
     "experiments": {
       "typedRoutes": true,

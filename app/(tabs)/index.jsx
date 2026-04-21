@@ -265,7 +265,7 @@ export default function QuantumPay() {
   };
 
   const handleAddMoney = async () => {
-    // The Stripe Webhook will handle all database logic.
+    // Razorpay verification on the backend handles all database logic.
     // We only need to play the sound and change the UI step.
     const amt = Number(addAmount); if (!amt) return;
     playSuccessSound(); 
