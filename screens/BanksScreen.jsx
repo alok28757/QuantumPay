@@ -13,7 +13,7 @@ export default function BanksScreen({
   const handleLinkBank = async () => {
     const newBank = {
       id: Date.now().toString(),
-      bankName: selectedBank.label,
+      bankName: selectedBank?.label || "Linked Bank",
       accountNumber: "XX" + Math.floor(1000 + Math.random() * 9000),
       type: "Savings"
     };

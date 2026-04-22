@@ -80,40 +80,7 @@ export default function AddMoneyScreen({
             <span style={{ color: "#4ade80", fontWeight: 800 }}>₹{(balance + Number(addAmount)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
           </div>
         </div>}
-        <div onClick={() => addAmount && setAddMoneyStep(2)} style={{ ...S.gradBtn(!addAmount), display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>Choose Payment Method <ArrowRight size={18} color="#fff" /></div>
-      </>}
-      {addMoneyStep === 2 && <>
-        <div style={{ ...S.card, padding: 14, marginBottom: 18 }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Adding</span>
-            <span style={{ color: "#4ade80", fontWeight: 900, fontSize: 16 }}>₹{Number(addAmount).toLocaleString("en-IN")}</span>
-          </div>
-        </div>
-        <div style={S.label}>SELECT PAYMENT METHOD</div>
-        {linkedBanks.length > 0 && (
-          <div onClick={() => handleRazorpayCheckout(Session.get())} style={{ ...S.card, padding: 16, marginTop: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 14, cursor: "pointer", border: "1px solid rgba(16,185,129,0.4)" }}>
-            <div style={{ width: 46, height: 46, borderRadius: 14, background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}><Landmark size={22} color="#10b981" /></div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{linkedBanks[0].bankName}</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>{linkedBanks[0].type} • {linkedBanks[0].accountNumber}</div>
-            </div>
-            <div style={{ color: "#10b981", fontSize: 12, fontWeight: 700 }}>Primary</div>
-          </div>
-        )}
-        {[
-          { icon: Landmark, label: "Net Banking", sub: "HDFC, ICICI, SBI & more", color: "#06b6d4" },
-          { icon: CreditCard, label: "Debit / Credit Card", sub: "Visa, Mastercard, RuPay", color: "#8b5cf6" },
-          { icon: Smartphone, label: "UPI Transfer", sub: "Pay via any UPI app", color: "#10b981" },
-        ].map(m => (
-          <div key={m.label} onClick={() => handleRazorpayCheckout(Session.get())} style={{ ...S.card, padding: 16, marginTop: 12, display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
-            <div style={{ width: 46, height: 46, borderRadius: 14, background: `${m.color}18`, border: `1px solid ${m.color}30`, display: "flex", alignItems: "center", justifyContent: "center", color: m.color }}><m.icon size={22} /></div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{m.label}</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>{m.sub}</div>
-            </div>
-            <div style={{ color: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center" }}><ChevronRight size={20} /></div>
-          </div>
-        ))}
+        <div onClick={() => addAmount && handleRazorpayCheckout(Session.get())} style={{ ...S.gradBtn(!addAmount), display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>Proceed to Pay with Razorpay <ArrowRight size={18} color="#fff" /></div>
       </>}
       {addMoneyStep === 3 && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 50 }}>
