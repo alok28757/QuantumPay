@@ -295,7 +295,7 @@ export default function QuantumPay() {
   // APP SCREEN ROUTING
   // ═══════════════════════════════════════════════════════════════════════════
   const renderScreen = () => {
-    if (screen === "send") return <SendScreen sendStep={sendStep} setSendStep={setSendStep} selectedContact={selectedContact} setSelectedContact={setSelectedContact} amount={amount} setAmount={setAmount} note={note} setNote={setNote} pin={pin} setPin={setPin} upiSearch={upiSearch} setUpiSearch={setUpiSearch} contacts={contacts} linkedBanks={linkedBanks} goBack={goBack} handleSend={handleSend} setBankStep={setBankStep} setScreen={setScreen} />;
+    if (screen === "send") return <SendScreen sendStep={sendStep} setSendStep={setSendStep} selectedContact={selectedContact} setSelectedContact={setSelectedContact} amount={amount} setAmount={setAmount} note={note} setNote={setNote} pin={pin} setPin={setPin} upiSearch={upiSearch} setUpiSearch={setUpiSearch} contacts={contacts} balance={balance} goBack={goBack} handleSend={handleSend} setAddMoneyStep={setAddMoneyStep} setScreen={setScreen} />;
     if (screen === "scan") return <ScanScreen upiId={upiId} userName={userName} scanTab={scanTab} setScanTab={setScanTab} payUpi={payUpi} setPayUpi={setPayUpi} goBack={goBack} navigate={navigate} setSelectedContact={setSelectedContact} setSendStep={setSendStep} />;
     if (screen === "history") return <HistoryScreen transactions={transactions} activeTab={activeTab} setActiveTab={setActiveTab} contacts={contacts} setSelectedTx={setSelectedTx} goBack={goBack} />;
     if (screen === "request") return <RequestScreen upiId={upiId} user={user} profile={profile} goBack={goBack} />;

@@ -6,7 +6,7 @@ export default function SendScreen({
   sendStep, setSendStep, selectedContact, setSelectedContact,
   amount, setAmount, note, setNote, pin, setPin,
   upiSearch, setUpiSearch, contacts,
-  linkedBanks, goBack, handleSend, setBankStep, setScreen,
+  balance, goBack, handleSend, setAddMoneyStep, setScreen,
 }) {
   return (
     <div style={{ padding: "16px 20px" }}>
@@ -75,18 +75,20 @@ export default function SendScreen({
           ))}
         </div>
         <input value={note} onChange={e => setNote(e.target.value)} placeholder="Add a note (optional)" style={{ ...S.input, marginBottom: 18 }} />
-        {linkedBanks.length === 0 ? (
-          <div onClick={() => { setBankStep(1); setScreen("banks"); }} style={S.gradBtn(false)}>Link Bank Account to Send</div>
+        {Number(amount) > balance ? (
+          <div onClick={() => { setAddMoneyStep(1); setScreen("addmoney"); }} style={S.gradBtn(false)}>Insufficient Balance - Add Money</div>
         ) : (
           <>
             <div style={{ ...S.card, padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(16,185,129,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}><Landmark size={16} color="#10b981" /></div>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(139,92,246,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Smartphone size={16} color="#8b5cf6" />
+              </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>Paying from</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{linkedBanks[0].bankName} • {linkedBanks[0].accountNumber}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>QuantumPay Wallet (₹{balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})</div>
               </div>
             </div>
-            <div onClick={() => amount && setSendStep(3)} style={{ ...S.gradBtn(!amount), display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>Continue <ArrowRight size={18} color="#fff" /></div>
+            <div onClick={() => amount && Number(amount) > 0 && setSendStep(3)} style={{ ...S.gradBtn(!amount || Number(amount) <= 0), display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>Continue <ArrowRight size={18} color="#fff" /></div>
           </>
         )}
       </>}
