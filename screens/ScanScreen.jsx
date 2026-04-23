@@ -74,7 +74,7 @@ export default function ScanScreen({
         <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>Scan & Pay</div>
       </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        {[["my-qr", "My QR Code"], ["scan-qr", "Scan QR"]].map(([key, label]) => (
+        {[["scan-qr", "Scan QR"], ["my-qr", "My QR Code"]].map(([key, label]) => (
           <div key={key} onClick={() => setScanTab(key)} style={{ flex: 1, padding: "10px", borderRadius: 12, textAlign: "center", fontSize: 13, fontWeight: 700, cursor: "pointer", background: scanTab === key ? "linear-gradient(135deg,#8b5cf6,#06b6d4)" : "rgba(255,255,255,0.07)", color: scanTab === key ? "#fff" : "rgba(255,255,255,0.4)" }}>{label}</div>
         ))}
       </div>

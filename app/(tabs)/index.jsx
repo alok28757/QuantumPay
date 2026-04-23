@@ -63,7 +63,7 @@ export default function QuantumPay() {
   const [addMoneyStep, setAddMoneyStep] = useState(1);
   const [addAmount, setAddAmount] = useState("");
   const [upiSearch, setUpiSearch] = useState("");
-  const [scanTab, setScanTab] = useState("my-qr");
+  const [scanTab, setScanTab] = useState("scan-qr");
   const [payUpi, setPayUpi] = useState("");
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [contacts, setContacts] = useState([]);
