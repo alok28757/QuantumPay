@@ -12,9 +12,32 @@ export default function ScanScreen({
   const [scanError, setScanError] = useState("");
   const [scanning, setScanning] = useState(false);
 
-  // Cleanup scanner on tab switch or unmount
+  // Handle scanner lifecycle: cleanup old scanner, auto-start on scan-qr tab
   useEffect(() => {
+    let timer = null;
+
+    // Stop any existing scanner first
+    if (scannerInstanceRef.current) {
+      scannerInstanceRef.current.stop().catch(() => { });
+      scannerInstanceRef.current = null;
+      setScanning(false);
+    }
+
+    // Clear any leftover DOM content from scanner
+    const readerEl = document.getElementById("qr-reader");
+    if (readerEl) {
+      while (readerEl.firstChild) {
+        readerEl.removeChild(readerEl.firstChild);
+      }
+    }
+
+    // Auto-start if on scan tab
+    if (scanTab === "scan-qr") {
+      timer = setTimeout(() => startScanner(), 500);
+    }
+
     return () => {
+      if (timer) clearTimeout(timer);
       if (scannerInstanceRef.current) {
         scannerInstanceRef.current.stop().catch(() => { });
         scannerInstanceRef.current = null;
@@ -101,14 +124,12 @@ export default function ScanScreen({
               {!scanning && (
                 <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
                   <div style={{ color: "rgba(255,255,255,0.5)" }}><Camera size={48} /></div>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", textAlign: "center", padding: "0 20px" }}>Tap button below to open camera</div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", textAlign: "center", padding: "0 20px" }}>Opening camera...</div>
                 </div>
               )}
             </div>
             {scanError && <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 12, padding: "10px 14px", fontSize: 12, color: "#f43f5e", width: "100%", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={14} color="#f43f5e" /> {scanError}</div>}
-            {!scanning ? (
-              <div onClick={startScanner} style={{ ...S.gradBtn(false), width: "100%", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Search size={16} /> Start Scanner</div>
-            ) : (
+            {scanning && (
               <div onClick={stopScanner} style={{ background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 18, padding: "14px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 14, fontWeight: 800, color: "#f43f5e", cursor: "pointer", width: "100%", boxSizing: "border-box" }}><Square size={16} fill="#f43f5e" /> Stop Scanner</div>
             )}
           </div>
