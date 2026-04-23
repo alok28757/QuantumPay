@@ -120,9 +120,10 @@ export default function ScanScreen({
           {/* QR Scanner Area */}
           <div style={{ ...S.card, padding: 20, marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#8b5cf6", letterSpacing: 0.5, display: "flex", alignItems: "center", gap: 6 }}><QrCode size={16} /> SCAN QR CODE</div>
-            <div id="qr-reader" ref={scannerRef} style={{ width: 260, height: 260, borderRadius: 16, overflow: "hidden", background: "#000", border: "2px solid rgba(16,185,129,0.4)" }}>
+            <div style={{ position: "relative", width: 260, height: 260 }}>
+              <div id="qr-reader" ref={scannerRef} style={{ width: 260, height: 260, borderRadius: 16, overflow: "hidden", background: "#000", border: "2px solid rgba(16,185,129,0.4)" }} />
               {!scanning && (
-                <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+                <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, pointerEvents: "none" }}>
                   <div style={{ color: "rgba(255,255,255,0.5)" }}><Camera size={48} /></div>
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", textAlign: "center", padding: "0 20px" }}>Opening camera...</div>
                 </div>
