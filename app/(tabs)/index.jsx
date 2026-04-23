@@ -1,8 +1,7 @@
 import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, setDoc, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from "react";
 import { decryptTransaction, encryptTransaction, generatePQCKeys, getPQCPrivateKey, hashMpin, signTransaction, storePQCPrivateKey } from "../../lib/crypto";
-import { db, getSession, signInUser, signOutUser, signUpUser } from "../../lib/firebase";
-import { Session } from "../../lib/session";
+import { auth, db, signInUser, signOutUser, signUpUser } from "../../lib/firebase";
 import { playSuccessSound } from "../../lib/utils";
 import { sendMoneyApi } from '../../lib/api';
 
@@ -111,32 +110,33 @@ export default function QuantumPay() {
   };
 
   useEffect(() => {
-    const init = async () => {
-      console.log("QuantumPay mode: ☁️ CLOUD");
-      const phone = Session.get();
-      if (phone) {
-        const session = await getSession();
-        if (session) {
+    console.log("QuantumPay mode: ☁️ CLOUD");
+    // Listen for Firebase Auth state changes (server-based session)
+    const { onAuthStateChanged } = require('firebase/auth');
+    const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const phone = firebaseUser.email?.replace("@qpay.app", "");
+        if (phone) {
           await loadUserData(phone);
           setAuthStep("app");
-          // Start real-time listener only after authenticated
+          // Start real-time listener
           const txRef = collection(db, "transactions");
-          const unsubscribe = onSnapshot(txRef, (snapshot) => {
+          const unsubTx = onSnapshot(txRef, (snapshot) => {
             snapshot.docChanges().forEach((change) => {
               if (change.type === "added") {
                 const tx = change.doc.data();
-                const cp = Session.get();
+                const cp = getPhoneFromAuth();
                 if (cp && (tx.sender_phone === cp || tx.receiver_phone === cp)) {
                   loadUserData(cp);
                 }
               }
             });
           });
-          return () => unsubscribe();
+          return () => unsubTx();
         }
       }
-    };
-    init();
+    });
+    return () => unsubAuth();
   }, []);
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -190,7 +190,7 @@ export default function QuantumPay() {
       try {
         await setDoc(doc(db, "profiles", regPhone), { phone: regPhone, name: regName, dob: regDob, upi_id: regUpi, mpin: hashedPin, balance: 0, public_key: pqcKeys.publicKey, user_id: userId, created_at: new Date().toISOString() });
       } catch (error) { setRegError("Registration failed: " + error.message); return; }
-      Session.set(regPhone);
+      // Firebase Auth session is automatically persisted — no local storage needed
       await loadUserData(regPhone);
       setRegError(""); setAuthStep("welcome");
       setTimeout(() => setAuthStep("app"), 2500);
@@ -214,7 +214,7 @@ export default function QuantumPay() {
           await updateDoc(docRef, { user_id: authData.user.uid });
         }
       }
-      Session.set(loginPhone); await loadUserData(loginPhone);
+      await loadUserData(loginPhone);
       setLoginError(""); setAuthStep("welcome");
       setTimeout(() => setAuthStep("app"), 2000);
     }
@@ -222,7 +222,6 @@ export default function QuantumPay() {
 
   const handleLogout = async () => {
     await signOutUser();
-    Session.clear();
     setUser(null); setProfile({ name: "", phone: "" }); setBalance(0); setTransactions([]);
     setLoginPhone(""); setLoginMpin(""); setLoginError("");
     setRegPhone(""); setRegName(""); setRegDob(""); setRegUpi(""); setRegMpin(""); setRegMpinConfirm(""); setRegError("");
@@ -236,7 +235,7 @@ export default function QuantumPay() {
   const handleSend = async () => {
     if (!selectedContact) return;
     const amt = Number(amount);
-    const senderPhone = Session.get();
+    const senderPhone = getPhoneFromAuth();
     const senderName = profile.name || user?.name || "Someone";
     const recipientUpi = selectedContact.upi;
 
@@ -273,7 +272,7 @@ export default function QuantumPay() {
     playSuccessSound(); 
     setAddMoneyStep(3);
     // Reload real balance from Firestore after Razorpay credits the wallet
-    const phone = Session.get();
+    const phone = getPhoneFromAuth();
     if (phone) await loadUserData(phone);
   };
 
