@@ -261,15 +261,20 @@ export default function QuantumPay() {
     }
 
     const tx = { id: Date.now(), name: selectedContact.name, type: "sent", amount: amt, time: "Just now", note: note || "Payment" };
-    setTransactions(p => [tx, ...p]); setBalance(b => b - amt); playSuccessSound(); setSendStep(4);
+    setTransactions(p => [tx, ...p]); playSuccessSound(); setSendStep(4);
+    // Reload real balance from Firestore
+    await loadUserData(senderPhone);
   };
 
   const handleAddMoney = async () => {
     // Razorpay verification on the backend handles all database logic.
-    // We only need to play the sound and change the UI step.
+    // We only need to play the sound, change the UI step, and reload balance.
     const amt = Number(addAmount); if (!amt) return;
     playSuccessSound(); 
     setAddMoneyStep(3);
+    // Reload real balance from Firestore after Razorpay credits the wallet
+    const phone = Session.get();
+    if (phone) await loadUserData(phone);
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
