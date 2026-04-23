@@ -1,6 +1,6 @@
 // QuantumPay — Add money screen (Razorpay)
 import { S } from '../constants/styles';
-import { ArrowLeft, ArrowRight, Landmark, CreditCard, Smartphone, ChevronRight, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 
 import { useRazorpay } from '../lib/razorpayWrapper';
 import { createRazorpayOrder, verifyRazorpayPayment } from '../lib/api';
@@ -8,7 +8,7 @@ import { Session } from '../lib/session';
 
 export default function AddMoneyScreen({
   addMoneyStep, setAddMoneyStep, addAmount, setAddAmount,
-  balance, linkedBanks, goBack, handleAddMoney, setScreen,
+  balance, goBack, handleAddMoney, setScreen,
 }) {
   const { openCheckout } = useRazorpay();
 

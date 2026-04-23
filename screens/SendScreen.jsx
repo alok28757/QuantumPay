@@ -1,6 +1,6 @@
 // QuantumPay — Send money screen
 import { S } from '../constants/styles';
-import { ArrowLeft, ArrowRight, Search, X, User, ChevronRight, Smartphone, Landmark, Check, Delete } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Search, X, User, ChevronRight, Smartphone, Check, Delete } from 'lucide-react';
 
 export default function SendScreen({
   sendStep, setSendStep, selectedContact, setSelectedContact,
