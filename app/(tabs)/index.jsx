@@ -29,7 +29,7 @@ import TransactionReceipt from "../../screens/TransactionReceipt";
 
 // ── Shared Components ────────────────────────────────────────────────────────
 import PhoneFrame from "../../components/PhoneFrame";
-import { BatteryFull, Home as HomeIcon, ScanLine, History as HistoryIcon, Atom } from 'lucide-react';
+import { Home as HomeIcon, ScanLine, History as HistoryIcon, Atom } from 'lucide-react';
 
 export default function QuantumPay() {
   // ═══════════════════════════════════════════════════════════════════════════
@@ -331,14 +331,6 @@ export default function QuantumPay() {
   return (
     <>
       <PhoneFrame>
-        <div style={{ background: "#0a0a18", padding: "10px 24px 6px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
-          <span style={{ fontWeight: 800 }}>9:41</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <Atom size={14} color="#06b6d4" />
-            <span style={{ fontSize: 11, fontWeight: 900, background: "linear-gradient(135deg,#8b5cf6,#06b6d4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 2 }}>QUANTUMPAY</span>
-          </div>
-          <span><BatteryFull size={14} color="rgba(255,255,255,0.5)" /></span>
-        </div>
         <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none", position: "relative" }}>
           {selectedTx ? <TransactionReceipt selectedTx={selectedTx} setSelectedTx={setSelectedTx} linkedBanks={linkedBanks} /> : renderScreen()}
         </div>
