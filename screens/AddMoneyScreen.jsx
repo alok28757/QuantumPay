@@ -80,7 +80,12 @@ export default function AddMoneyScreen({
             <span style={{ color: "#4ade80", fontWeight: 800 }}>₹{(balance + Number(addAmount)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
           </div>
         </div>}
-        <div onClick={() => addAmount && handleRazorpayCheckout(Session.get())} style={{ ...S.gradBtn(!addAmount), display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>Proceed to Pay with Razorpay <ArrowRight size={18} color="#fff" /></div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div onClick={() => addAmount && handleRazorpayCheckout(Session.get())} style={{ ...S.gradBtn(!addAmount), display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>Proceed with Razorpay <ArrowRight size={18} color="#fff" /></div>
+          <div onClick={() => addAmount && handleAddMoney(addAmount)} style={{ ...S.gradBtn(!addAmount), display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: addAmount ? "rgba(16,185,129,0.2)" : undefined, border: "1px solid rgba(16,185,129,0.5)" }}>
+            <Check size={16} color="#4ade80" /> Demo Pay (Instant)
+          </div>
+        </div>
       </>}
       {addMoneyStep === 3 && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 50 }}>

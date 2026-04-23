@@ -265,15 +265,30 @@ export default function QuantumPay() {
     await loadUserData(senderPhone);
   };
 
-  const handleAddMoney = async () => {
-    // Razorpay verification on the backend handles all database logic.
-    // We only need to play the sound, change the UI step, and reload balance.
-    const amt = Number(addAmount); if (!amt) return;
-    playSuccessSound(); 
-    setAddMoneyStep(3);
-    // Reload real balance from Firestore after Razorpay credits the wallet
+  const handleAddMoney = async (amt) => {
+    const amount = Number(amt || addAmount); if (!amount) return;
     const phone = user?.phone || profile?.phone;
-    if (phone) await loadUserData(phone);
+    playSuccessSound();
+    setAddMoneyStep(3);
+    // Optimistically update local UI immediately
+    setBalance(b => b + amount);
+    setTransactions(p => [{ id: Date.now(), name: "Wallet Top-up", type: "received", amount, time: "Just now", note: "Added to wallet" }, ...p]);
+    // Write directly to Firestore (demo mode — bypasses backend verification)
+    if (phone) {
+      try {
+        const phoneRef = doc(db, "profiles", phone);
+        await updateDoc(phoneRef, { balance: balance + amount });
+        await setDoc(doc(collection(db, "transactions")), {
+          type: "received", name: "Wallet Top-up",
+          amount, receiver_phone: phone, sender_phone: phone,
+          sender_name: "Wallet Top-up", receiver_name: profile.name || "Self",
+          note: "Added to wallet", created_at: new Date().toISOString(),
+        });
+        await loadUserData(phone);
+      } catch (e) {
+        console.warn("Balance update error:", e.message);
+      }
+    }
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
