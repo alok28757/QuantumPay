@@ -235,7 +235,7 @@ export default function QuantumPay() {
   const handleSend = async () => {
     if (!selectedContact) return;
     const amt = Number(amount);
-    const senderPhone = getPhoneFromAuth();
+    const senderPhone = user?.phone || profile?.phone;
     const senderName = profile.name || user?.name || "Someone";
     const recipientUpi = selectedContact.upi;
 
@@ -272,7 +272,7 @@ export default function QuantumPay() {
     playSuccessSound(); 
     setAddMoneyStep(3);
     // Reload real balance from Firestore after Razorpay credits the wallet
-    const phone = getPhoneFromAuth();
+    const phone = user?.phone || profile?.phone;
     if (phone) await loadUserData(phone);
   };
 
