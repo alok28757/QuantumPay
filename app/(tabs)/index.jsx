@@ -71,7 +71,7 @@ export default function QuantumPay() {
   const [selectedBank, setSelectedBank] = useState(null);
   const [bankOtp, setBankOtp] = useState("");
   const [selectedTx, setSelectedTx] = useState(null);
-
+  const [isProcessing, setIsProcessing] = useState(false);
   // Helper: extract phone from Firebase Auth email (phone@qpay.app → phone)
   const getPhoneFromAuth = () => {
     const user = auth.currentUser;
@@ -155,11 +155,17 @@ export default function QuantumPay() {
   // AUTH HANDLERS
   // ═══════════════════════════════════════════════════════════════════════════
   const handleRegisterPhone = async () => {
+    if (isProcessing) return;
     if (!/^\d{10}$/.test(regPhone)) { setRegError("Enter a valid 10-digit phone number"); return; }
-    const docRef = doc(db, "profiles", regPhone);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) { setRegError("Already registered. Please login."); return; }
-    setRegError(""); setAuthStep("register-profile");
+    setIsProcessing(true);
+    try {
+      const docRef = doc(db, "profiles", regPhone);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) { setRegError("Already registered. Please login."); return; }
+      setRegError(""); setAuthStep("register-profile");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleRegisterProfile = () => {
@@ -171,11 +177,17 @@ export default function QuantumPay() {
   };
 
   const handleRegisterUpi = async () => {
+    if (isProcessing) return;
     if (!regUpi.includes("@")) { setRegError("UPI ID must contain @"); return; }
-    const q = query(collection(db, "profiles"), where("upi_id", "==", regUpi), limit(1));
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) { setRegError("This UPI ID is already taken."); return; }
-    setRegError(""); setAuthStep("register-mpin");
+    setIsProcessing(true);
+    try {
+      const q = query(collection(db, "profiles"), where("upi_id", "==", regUpi), limit(1));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) { setRegError("This UPI ID is already taken."); return; }
+      setRegError(""); setAuthStep("register-mpin");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleSetMpin = (val, done) => {
@@ -186,43 +198,55 @@ export default function QuantumPay() {
   const handleConfirmMpin = async (val, done) => {
     setRegMpinConfirm(val);
     if (done) {
+      if (isProcessing) return;
       if (regMpin !== val) { setRegError("MPINs don't match. Try again."); setRegMpinConfirm(""); return; }
-      const hashedPin = await hashMpin(regMpin);
-      const pqcKeys = generatePQCKeys();
-      storePQCPrivateKey(regPhone, pqcKeys.privateKey);
-      const { data: authData, error: authErr } = await signUpUser(regPhone, hashedPin);
-      if (authErr) { setRegError("Registration failed: " + authErr.message); return; }
-      const userId = authData?.user?.uid;
+      setIsProcessing(true);
       try {
-        await setDoc(doc(db, "profiles", regPhone), { phone: regPhone, name: regName, dob: regDob, upi_id: regUpi, mpin: hashedPin, balance: 0, public_key: pqcKeys.publicKey, user_id: userId, created_at: new Date().toISOString() });
-      } catch (error) { setRegError("Registration failed: " + error.message); return; }
-      // Firebase Auth session is automatically persisted — no local storage needed
-      await loadUserData(regPhone);
-      setRegError(""); setAuthStep("welcome");
-      setTimeout(() => setAuthStep("app"), 2500);
+        const hashedPin = await hashMpin(regMpin);
+        const pqcKeys = generatePQCKeys();
+        storePQCPrivateKey(regPhone, pqcKeys.privateKey);
+        const { data: authData, error: authErr } = await signUpUser(regPhone, hashedPin);
+        if (authErr) { setRegError("Registration failed: " + authErr.message); return; }
+        const userId = authData?.user?.uid;
+        try {
+          await setDoc(doc(db, "profiles", regPhone), { phone: regPhone, name: regName, dob: regDob, upi_id: regUpi, mpin: hashedPin, balance: 0, public_key: pqcKeys.publicKey, user_id: userId, created_at: new Date().toISOString() });
+        } catch (error) { setRegError("Registration failed: " + error.message); return; }
+        // Firebase Auth session is automatically persisted — no local storage needed
+        await loadUserData(regPhone);
+        setRegError(""); setAuthStep("welcome");
+        setTimeout(() => setAuthStep("app"), 2500);
+      } finally {
+        setIsProcessing(false);
+      }
     }
   };
 
   const handleLoginMpin = async (val, done) => {
     setLoginMpin(val);
     if (done) {
+      if (isProcessing) return;
       if (!/^\d{10}$/.test(loginPhone)) { setLoginError("Enter a valid 10-digit phone number"); setLoginMpin(""); return; }
-      const hashedVal = await hashMpin(val);
-      const { error } = await signInUser(loginPhone, hashedVal);
-      if (error) {
-        const docRef = doc(db, "profiles", loginPhone);
-        const docSnap = await getDoc(docRef);
-        if (!docSnap.exists()) { setLoginError("Phone not registered. Please sign up."); setLoginMpin(""); return; }
-        const data = docSnap.data();
-        if (data.mpin !== hashedVal) { setLoginError("Wrong MPIN. Please try again."); setLoginMpin(""); return; }
-        const { data: authData } = await signUpUser(loginPhone, hashedVal);
-        if (authData?.user?.uid) {
-          await updateDoc(docRef, { user_id: authData.user.uid });
+      setIsProcessing(true);
+      try {
+        const hashedVal = await hashMpin(val);
+        const { error } = await signInUser(loginPhone, hashedVal);
+        if (error) {
+          const docRef = doc(db, "profiles", loginPhone);
+          const docSnap = await getDoc(docRef);
+          if (!docSnap.exists()) { setLoginError("Phone not registered. Please sign up."); setLoginMpin(""); return; }
+          const data = docSnap.data();
+          if (data.mpin !== hashedVal) { setLoginError("Wrong MPIN. Please try again."); setLoginMpin(""); return; }
+          const { data: authData } = await signUpUser(loginPhone, hashedVal);
+          if (authData?.user?.uid) {
+            await updateDoc(docRef, { user_id: authData.user.uid });
+          }
         }
+        await loadUserData(loginPhone);
+        setLoginError(""); setAuthStep("welcome");
+        setTimeout(() => setAuthStep("app"), 2000);
+      } finally {
+        setIsProcessing(false);
       }
-      await loadUserData(loginPhone);
-      setLoginError(""); setAuthStep("welcome");
-      setTimeout(() => setAuthStep("app"), 2000);
     }
   };
 
@@ -239,53 +263,47 @@ export default function QuantumPay() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   const handleSend = async () => {
+    if (isProcessing) return;
     if (!selectedContact) return;
-    const amt = Number(amount);
-    const senderPhone = user?.phone || profile?.phone;
-    const senderName = profile.name || user?.name || "Someone";
-    const recipientUpi = selectedContact.upi;
+    setIsProcessing(true);
+    try {
+      const amt = Number(amount);
+      const senderPhone = getPhoneFromAuth();
+      const senderName = profile.name || user?.name || "Someone";
+      const recipientUpi = selectedContact.upi;
 
-    const recipientQSingle = query(collection(db, "profiles"), where("upi_id", "==", recipientUpi), limit(1));
-    const recipientSnapSingle = await getDocs(recipientQSingle);
-    const recipientPhone = !recipientSnapSingle.empty ? recipientSnapSingle.docs[0].data().phone : recipientUpi;
-    const rawTx = { sender_phone: senderPhone, sender_name: senderName, receiver_phone: recipientPhone, receiver_name: selectedContact.name, amount: amt, note: note || "Payment", created_at: new Date().toISOString() };
-    
-    const senderEncTx = await encryptTransaction(senderPhone, rawTx);
-    let receiverEncTx = null;
-    if (!recipientSnapSingle.empty) {
-      receiverEncTx = await encryptTransaction(recipientPhone, rawTx);
+      const recipientQSingle = query(collection(db, "profiles"), where("upi_id", "==", recipientUpi), limit(1));
+      const recipientSnapSingle = await getDocs(recipientQSingle);
+      const recipientPhone = !recipientSnapSingle.empty ? recipientSnapSingle.docs[0].data().phone : recipientUpi;
+      const rawTx = { sender_phone: senderPhone, sender_name: senderName, receiver_phone: recipientPhone, receiver_name: selectedContact.name, amount: amt, note: note || "Payment", created_at: new Date().toISOString() };
+      
+      const senderEncTx = await encryptTransaction(senderPhone, rawTx);
+      let receiverEncTx = null;
+      if (!recipientSnapSingle.empty) {
+        receiverEncTx = await encryptTransaction(recipientPhone, rawTx);
+      }
+
+      const res = await sendMoneyApi({
+          senderPhone, recipientUpi, amount: amt, senderEncTx, receiverEncTx
+      });
+
+      if (res.error) {
+         alert("Failed to send: " + res.error);
+         return;
+      }
+
+      const tx = { id: Date.now(), name: selectedContact.name, type: "sent", amount: amt, time: "Just now", note: note || "Payment" };
+      setTransactions(p => [tx, ...p]); playSuccessSound(); setSendStep(4);
+      // Reload real balance from Firestore
+      await loadUserData(senderPhone);
+    } finally {
+      setIsProcessing(false);
     }
-
-    const res = await sendMoneyApi({
-        senderPhone, recipientUpi, amount: amt, senderEncTx, receiverEncTx
-    });
-
-    if (res.error) {
-       alert("Failed to send: " + res.error);
-       return;
-    }
-
-    const tx = { id: Date.now(), name: selectedContact.name, type: "sent", amount: amt, time: "Just now", note: note || "Payment" };
-    setTransactions(p => [tx, ...p]); playSuccessSound(); setSendStep(4);
-    // Reload real balance from Firestore
-    await loadUserData(senderPhone);
   };
 
   const handleAddMoney = async (amt) => {
+    if (isProcessing) return;
     const amount = Number(amt || addAmount); if (!amount) return;
-    const phone = user?.phone || profile?.phone;
-    playSuccessSound();
-    setAddMoneyStep(3);
-    // Optimistically update local UI immediately
-    setBalance(b => b + amount);
-    setTransactions(p => [{ id: Date.now(), name: "Wallet Top-up", type: "received", amount, time: "Just now", note: "Added to wallet" }, ...p]);
-    // Write directly to Firestore (demo mode — bypasses backend verification)
-    if (phone) {
-      try {
-        const phoneRef = doc(db, "profiles", phone);
-        await updateDoc(phoneRef, { balance: balance + amount });
-        await setDoc(doc(collection(db, "transactions")), {
-          type: "received", name: "Wallet Top-up",
           amount, receiver_phone: phone, sender_phone: phone,
           sender_name: "Wallet Top-up", receiver_name: profile.name || "Self",
           note: "Added to wallet", created_at: new Date().toISOString(),
