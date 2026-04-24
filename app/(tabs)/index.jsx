@@ -72,6 +72,12 @@ export default function QuantumPay() {
   const [bankOtp, setBankOtp] = useState("");
   const [selectedTx, setSelectedTx] = useState(null);
 
+  // Helper: extract phone from Firebase Auth email (phone@qpay.app → phone)
+  const getPhoneFromAuth = () => {
+    const user = auth.currentUser;
+    return user?.email?.replace("@qpay.app", "") || null;
+  };
+
   // ═══════════════════════════════════════════════════════════════════════════
   // DATA LAYER
   // ═══════════════════════════════════════════════════════════════════════════
