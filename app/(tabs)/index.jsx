@@ -9,6 +9,7 @@ import { sendMoneyApi } from '../../lib/api';
 import SplashScreen from "../../screens/auth/SplashScreen";
 import LoginScreen from "../../screens/auth/LoginScreen";
 import RegisterPhoneScreen from "../../screens/auth/RegisterPhoneScreen";
+import RegisterOtpScreen from "../../screens/auth/RegisterOtpScreen";
 import RegisterProfileScreen from "../../screens/auth/RegisterProfileScreen";
 import RegisterUpiScreen from "../../screens/auth/RegisterUpiScreen";
 import RegisterMpinScreen from "../../screens/auth/RegisterMpinScreen";
@@ -162,7 +163,23 @@ export default function QuantumPay() {
       const docRef = doc(db, "profiles", regPhone);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) { setRegError("Already registered. Please login."); return; }
-      setRegError(""); setAuthStep("register-profile");
+      setRegError(""); setAuthStep("register-otp");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleVerifyOtp = async (otpCode) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    try {
+      if (!window.confirmationResult) throw new Error("No active OTP session.");
+      await window.confirmationResult.confirm(otpCode);
+      setRegError("");
+      setAuthStep("register-profile");
+    } catch (e) {
+      console.error(e);
+      setRegError("Invalid OTP code. Please try again.");
     } finally {
       setIsProcessing(false);
     }
@@ -304,6 +321,18 @@ export default function QuantumPay() {
   const handleAddMoney = async (amt) => {
     if (isProcessing) return;
     const amount = Number(amt || addAmount); if (!amount) return;
+    const phone = user?.phone || profile?.phone;
+    playSuccessSound();
+    setAddMoneyStep(3);
+    setBalance(b => b + amount);
+    setTransactions(p => [{ id: Date.now(), name: "Wallet Top-up", type: "received", amount, time: "Just now", note: "Added to wallet" }, ...p]);
+    if (phone) {
+      setIsProcessing(true);
+      try {
+        const phoneRef = doc(db, "profiles", phone);
+        await updateDoc(phoneRef, { balance: balance + amount });
+        await setDoc(doc(collection(db, "transactions")), {
+          type: "received", name: "Wallet Top-up",
           amount, receiver_phone: phone, sender_phone: phone,
           sender_name: "Wallet Top-up", receiver_name: profile.name || "Self",
           note: "Added to wallet", created_at: new Date().toISOString(),
@@ -311,6 +340,8 @@ export default function QuantumPay() {
         await loadUserData(phone);
       } catch (e) {
         console.warn("Balance update error:", e.message);
+      } finally {
+        setIsProcessing(false);
       }
     }
   };
@@ -328,6 +359,7 @@ export default function QuantumPay() {
   if (authStep === "splash") return <SplashScreen onGetStarted={() => setAuthStep("login")} />;
   if (authStep === "login") return <LoginScreen loginPhone={loginPhone} loginMpin={loginMpin} loginError={loginError} setLoginPhone={setLoginPhone} setLoginError={setLoginError} handleLoginMpin={handleLoginMpin} onRegister={() => { setRegPhone(""); setRegError(""); setAuthStep("register-phone"); }} />;
   if (authStep === "register-phone") return <RegisterPhoneScreen regPhone={regPhone} regError={regError} setRegPhone={setRegPhone} setRegError={setRegError} handleRegisterPhone={handleRegisterPhone} onBack={() => setAuthStep("login")} />;
+  if (authStep === "register-otp") return <RegisterOtpScreen phone={regPhone} regError={regError} setRegError={setRegError} handleVerifyOtp={handleVerifyOtp} onBack={() => setAuthStep("register-phone")} />;
   if (authStep === "register-profile") return <RegisterProfileScreen regName={regName} regDob={regDob} regError={regError} setRegName={setRegName} setRegDob={setRegDob} setRegError={setRegError} handleRegisterProfile={handleRegisterProfile} onBack={() => setAuthStep("register-phone")} />;
   if (authStep === "register-upi") return <RegisterUpiScreen regUpi={regUpi} regPhone={regPhone} regName={regName} regError={regError} setRegUpi={setRegUpi} setRegError={setRegError} handleRegisterUpi={handleRegisterUpi} onBack={() => setAuthStep("register-profile")} />;
   if (authStep === "register-mpin") return <RegisterMpinScreen regMpin={regMpin} regError={regError} handleSetMpin={handleSetMpin} onBack={() => setAuthStep("register-upi")} />;

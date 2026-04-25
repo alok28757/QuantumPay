@@ -3,7 +3,9 @@ import {
     createUserWithEmailAndPassword,
     getAuth,
     signInWithEmailAndPassword,
-    signOut
+    signOut,
+    RecaptchaVerifier,
+    signInWithPhoneNumber
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
@@ -21,6 +23,33 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// ─── AUTH HELPERS (phone+MPIN → Firebase Auth) ─────────────────────────────
+
+declare global {
+    interface Window {
+        recaptchaVerifier: any;
+    }
+}
+
+export const setupRecaptcha = (containerId: string) => {
+    if (!window.recaptchaVerifier) {
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+            size: 'invisible'
+        });
+    }
+    return window.recaptchaVerifier;
+};
+
+export async function sendSignInOTP(phone: string, appVerifier: any) {
+    try {
+        const formattedPhone = phone.startsWith('+') ? phone : `+91${phone}`;
+        const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
+        return { data: confirmationResult, error: null };
+    } catch (error) {
+        return { data: null, error };
+    }
+}
 
 
 // ─── AUTH HELPERS (phone+MPIN → Firebase Auth) ─────────────────────────────
